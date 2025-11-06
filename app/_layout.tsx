@@ -22,6 +22,12 @@ export default function RootLayout() {
       <Stack.Screen name="new-announcements" options={{
         headerShadowVisible: false,
       }}/>
+      <Stack.Screen name="profile" options={{
+        headerShadowVisible: false,
+      }}/>
+      <Stack.Screen name="locations" options={{
+        headerShadowVisible: false,
+      }}/>
     </Stack>
   );
 }

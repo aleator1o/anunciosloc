@@ -62,7 +62,7 @@ const HomeScreen = () => {
     } else if (tab === 'locations') {
       //router.push('/locations');
     } else if (tab === 'profile') {
-      //router.push('/profile');
+      router.push('/login');
     }
   };
 
