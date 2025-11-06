@@ -57,7 +57,7 @@ const AnnouncementsScreen = () => {
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={handleGoBack} style={styles.backButton}>
-          <Text style={styles.backIcon}>←</Text>
+          <Text style={styles.backIcon}></Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Anúncios</Text>
         <TouchableOpacity onPress={handleNewAnnouncement} style={styles.addButton}>

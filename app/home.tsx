@@ -58,11 +58,11 @@ const HomeScreen = () => {
   const handleNavigation = (tab: string) => {
     setActiveTab(tab);
     if (tab === 'announcements') {
-      // router.push('/announcements');
+      router.push('/announcements');
     } else if (tab === 'locations') {
-      // router.push('/locations');
+      //router.push('/locations');
     } else if (tab === 'profile') {
-      // router.push('/profile');
+      //router.push('/profile');
     }
   };
 
