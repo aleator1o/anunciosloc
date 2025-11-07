@@ -11,10 +11,14 @@ import {
   ScrollView,
   Switch,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
+import { useAuth } from './context/AuthContext';
+import { api } from './lib/api';
 
 const CreateLocationScreen = () => {
   const router = useRouter();
+  const { token } = useAuth();
   const [locationType, setLocationType] = useState<'GPS' | 'WiFi/BLE'>('GPS');
   const [locationName, setLocationName] = useState('');
   const [description, setDescription] = useState('');
@@ -25,6 +29,7 @@ const CreateLocationScreen = () => {
   const [wifiIds, setWifiIds] = useState('');
   const [isPublic, setIsPublic] = useState(false);
   const [allowAnnouncements, setAllowAnnouncements] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   const categories = [
     'Comércio',
@@ -44,7 +49,12 @@ const CreateLocationScreen = () => {
     setLongitude('13.2319');
   };
 
-  const handleCreateLocation = () => {
+  const handleCreateLocation = async () => {
+    if (!token) {
+      router.replace('/login');
+      return;
+    }
+
     if (!locationName.trim()) {
       Alert.alert('Erro', 'Por favor, insira o nome do local');
       return;
@@ -62,16 +72,45 @@ const CreateLocationScreen = () => {
       }
     }
 
-    Alert.alert(
-      'Sucesso',
-      'Local criado com sucesso!',
-      [
+    try {
+      const latitudeValue = Number(latitude);
+      const longitudeValue = Number(longitude);
+      const radiusValue = Number(radius);
+
+      if (locationType === 'GPS' && (Number.isNaN(latitudeValue) || Number.isNaN(longitudeValue))) {
+        Alert.alert('Erro', 'Latitude e longitude precisam ser números válidos');
+        return;
+      }
+
+      if (locationType === 'GPS' && Number.isNaN(radiusValue)) {
+        Alert.alert('Erro', 'O raio deve ser um número');
+        return;
+      }
+
+      setSubmitting(true);
+
+      const payload = {
+        name: locationName,
+        latitude: locationType === 'GPS' ? latitudeValue : undefined,
+        longitude: locationType === 'GPS' ? longitudeValue : undefined,
+        radiusMeters: locationType === 'GPS' ? radiusValue : undefined,
+        type: locationType === 'GPS' ? 'GEO' : 'WIFI',
+        identifiers: locationType === 'WiFi/BLE' ? wifiIds.split(',').map((id) => id.trim()).filter(Boolean) : [],
+      };
+
+      await api.post('/locations', payload, token);
+
+      Alert.alert('Sucesso', 'Local criado com sucesso!', [
         {
           text: 'OK',
-          onPress: () => router.back(),
+          onPress: () => router.replace('/locations'),
         },
-      ]
-    );
+      ]);
+    } catch (err) {
+      Alert.alert('Erro', (err as Error).message ?? 'Não foi possível criar o local');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -303,8 +342,13 @@ const CreateLocationScreen = () => {
         <TouchableOpacity 
           style={styles.createButton}
           onPress={handleCreateLocation}
+          disabled={submitting}
         >
-          <Text style={styles.createButtonText}>Criar Local</Text>
+          {submitting ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text style={styles.createButtonText}>Criar Local</Text>
+          )}
         </TouchableOpacity>
       </View>
     </SafeAreaView>

@@ -10,33 +10,65 @@ import {
   StatusBar,
   ScrollView,
   Switch,
+  Alert,
+  ActivityIndicator,
 } from 'react-native';
+import { useAuth } from './context/AuthContext';
+import { api } from './lib/api';
 
 const NewAnnouncementScreen = () => {
   const router = useRouter();
+  const { token } = useAuth();
   const [message, setMessage] = useState('');
-  const [deliveryMode, setDeliveryMode] = useState('centralized');
-  const [visibility, setVisibility] = useState('public');
+  const [deliveryMode, setDeliveryMode] = useState<'CENTRALIZED' | 'DECENTRALIZED'>('CENTRALIZED');
+  const [visibility, setVisibility] = useState<'PUBLIC' | 'PRIVATE'>('PUBLIC');
   const [publishNow, setPublishNow] = useState(true);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [selectedLocation, setSelectedLocation] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
   const handleGoBack = () => {
     router.back();
   };
 
-  const handlePublish = () => {
-    console.log('Publishing announcement:', {
-      message,
-      deliveryMode,
-      visibility,
-      publishNow,
-      startDate,
-      endDate,
-      selectedLocation,
-    });
-    // Implementar lógica de publicação
+  const handlePublish = async () => {
+    if (!token) {
+      router.replace('/login');
+      return;
+    }
+
+    if (!message.trim()) {
+      Alert.alert('Erro', 'Escreva a mensagem do anúncio');
+      return;
+    }
+
+    try {
+      setSubmitting(true);
+      await api.post(
+        '/announcements',
+        {
+          content: message,
+          deliveryMode,
+          visibility,
+          locationId: selectedLocation || undefined,
+          startsAt: publishNow || !startDate ? undefined : new Date(startDate).toISOString(),
+          endsAt: publishNow || !endDate ? undefined : new Date(endDate).toISOString(),
+        },
+        token,
+      );
+
+      Alert.alert('Sucesso', 'Anúncio publicado com sucesso!', [
+        {
+          text: 'Ver anúncios',
+          onPress: () => router.replace('/announcements'),
+        },
+      ]);
+    } catch (err) {
+      Alert.alert('Erro', (err as Error).message ?? 'Não foi possível publicar o anúncio');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const handleCancel = () => {
@@ -78,12 +110,14 @@ const NewAnnouncementScreen = () => {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Localização</Text>
           <Text style={styles.label}>Local de Destino</Text>
-          <TouchableOpacity style={styles.dropdown}>
-            <Text style={styles.dropdownText}>
-              {selectedLocation || 'Selecionar um local'}
-            </Text>
-            <Text style={styles.dropdownIcon}>›</Text>
-          </TouchableOpacity>
+          <TextInput
+            style={styles.dropdown}
+            placeholder="ID do local (opcional)"
+            placeholderTextColor="#9CA3AF"
+            value={selectedLocation}
+            onChangeText={setSelectedLocation}
+            autoCapitalize="none"
+          />
         </View>
 
         {/* Visibility Section */}
@@ -92,8 +126,8 @@ const NewAnnouncementScreen = () => {
           <Text style={styles.label}>Quem pode ver este anúncio?</Text>
           
           <TouchableOpacity 
-            style={[styles.radioOption, visibility === 'public' && styles.radioOptionSelected]}
-            onPress={() => setVisibility('public')}
+            style={[styles.radioOption, visibility === 'PUBLIC' && styles.radioOptionSelected]}
+            onPress={() => setVisibility('PUBLIC')}
           >
             <View style={styles.radioContent}>
               <Text style={styles.radioIcon}>🌍</Text>
@@ -101,8 +135,8 @@ const NewAnnouncementScreen = () => {
                 <Text style={styles.radioTitle}>Público (todos podem ver)</Text>
               </View>
             </View>
-            <View style={[styles.radioCircle, visibility === 'public' && styles.radioCircleSelected]}>
-              {visibility === 'public' && <View style={styles.radioInner} />}
+            <View style={[styles.radioCircle, visibility === 'PUBLIC' && styles.radioCircleSelected]}>
+              {visibility === 'PUBLIC' && <View style={styles.radioInner} />}
             </View>
           </TouchableOpacity>
         </View>
@@ -112,8 +146,8 @@ const NewAnnouncementScreen = () => {
           <Text style={styles.sectionTitle}>Modo de Entrega</Text>
           
           <TouchableOpacity 
-            style={[styles.radioOption, deliveryMode === 'centralized' && styles.radioOptionSelected]}
-            onPress={() => setDeliveryMode('centralized')}
+            style={[styles.radioOption, deliveryMode === 'CENTRALIZED' && styles.radioOptionSelected]}
+            onPress={() => setDeliveryMode('CENTRALIZED')}
           >
             <View style={styles.radioContent}>
               <Text style={styles.radioIcon}>🌐</Text>
@@ -124,14 +158,14 @@ const NewAnnouncementScreen = () => {
                 </Text>
               </View>
             </View>
-            <View style={[styles.radioCircle, deliveryMode === 'centralized' && styles.radioCircleSelected]}>
-              {deliveryMode === 'centralized' && <View style={styles.radioInner} />}
+            <View style={[styles.radioCircle, deliveryMode === 'CENTRALIZED' && styles.radioCircleSelected]}>
+              {deliveryMode === 'CENTRALIZED' && <View style={styles.radioInner} />}
             </View>
           </TouchableOpacity>
 
           <TouchableOpacity 
-            style={[styles.radioOption, deliveryMode === 'decentralized' && styles.radioOptionSelected]}
-            onPress={() => setDeliveryMode('decentralized')}
+            style={[styles.radioOption, deliveryMode === 'DECENTRALIZED' && styles.radioOptionSelected]}
+            onPress={() => setDeliveryMode('DECENTRALIZED')}
           >
             <View style={styles.radioContent}>
               <Text style={styles.radioIcon}>📡</Text>
@@ -142,8 +176,8 @@ const NewAnnouncementScreen = () => {
                 </Text>
               </View>
             </View>
-            <View style={[styles.radioCircle, deliveryMode === 'decentralized' && styles.radioCircleSelected]}>
-              {deliveryMode === 'decentralized' && <View style={styles.radioInner} />}
+            <View style={[styles.radioCircle, deliveryMode === 'DECENTRALIZED' && styles.radioCircleSelected]}>
+              {deliveryMode === 'DECENTRALIZED' && <View style={styles.radioInner} />}
             </View>
           </TouchableOpacity>
         </View>
@@ -192,8 +226,12 @@ const NewAnnouncementScreen = () => {
         <TouchableOpacity style={styles.cancelButton} onPress={handleCancel}>
           <Text style={styles.cancelButtonText}>Cancelar</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.publishButton} onPress={handlePublish}>
-          <Text style={styles.publishButtonText}>Publicar Anúncio</Text>
+          <TouchableOpacity style={styles.publishButton} onPress={handlePublish} disabled={submitting}>
+          {submitting ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text style={styles.publishButtonText}>Publicar Anúncio</Text>
+          )}
         </TouchableOpacity>
       </View>
     </SafeAreaView>

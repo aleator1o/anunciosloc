@@ -10,9 +10,11 @@ import {
   ScrollView,
   Alert,
 } from 'react-native';
+import { useAuth } from './context/AuthContext';
 
 const ProfileScreen = () => {
   const router = useRouter();
+  const { user, logout } = useAuth();
   const [activeTab, setActiveTab] = useState('profile');
 
   const handleNavigation = (tab: string) => {
@@ -27,31 +29,30 @@ const ProfileScreen = () => {
   };
 
   const handleEditProfile = () => {
-    Alert.alert('Editar Perfil', 'Funcionalidade em desenvolvimento');
+    router.push('/edit-profile');
   };
 
   const handleSettings = () => {
-    Alert.alert('Configurações', 'Funcionalidade em desenvolvimento');
+    router.push('/settings');
   };
 
   const handleLogout = () => {
-    Alert.alert(
-      'Terminar Sessão',
-      'Tem certeza que deseja sair?',
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { 
-          text: 'Sair', 
-          style: 'destructive', 
-          onPress: () => router.push('/login')
-        }
-      ]
-    );
+    Alert.alert('Terminar Sessão', 'Tem certeza que deseja sair?', [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Sair',
+        style: 'destructive',
+        onPress: () => {
+          logout();
+          router.replace('/login');
+        },
+      },
+    ]);
   };
 
   const profileData = {
-    username: 'alice_silva',
-    email: 'alice.silva@email.com',
+    username: user?.username ?? 'Utilizador',
+    email: user?.email ?? 'sem-email',
     occupation: 'Estudante',
     club: 'Real Madrid',
     age: '25',

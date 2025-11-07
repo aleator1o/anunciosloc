@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -8,42 +8,22 @@ import {
   SafeAreaView,
   StatusBar,
   ScrollView,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
+import { useAuth } from './context/AuthContext';
+import { api } from './lib/api';
+import { Announcement } from '../types/api';
 
 const AnnouncementsScreen = () => {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState('announcements');
-
-  const announcements = [
-    {
-      id: 1,
-      author: 'Alice Silva',
-      avatar: '👩',
-      verified: true,
-      location: 'Largo da Independência',
-      time: 'há 2 horas',
-      content: 'Olá pessoal! Estou a organizar um evento de limpeza comunitária no Largo da Independência este sábado às 10h. Vamos focar na área perto do lago. Os materiais serão fornecidos, mas podem trazer as suas próprias luvas se tiverem. Vamos tornar o nosso parque mais bonito juntos! 🌱',
-      likes: 23,
-      comments: 5,
-      bookmarked: true,
-    },
-    {
-      id: 2,
-      author: 'João Santos',
-      avatar: '👨',
-      verified: false,
-      badge: 'Vendedor',
-      location: 'Belas Shopping',
-      time: 'há 4 horas',
-      content: 'Vendo iPhone 13 Pro Max em excelente estado. Preço negociável. Interessados contactem por WhatsApp: +244 923 456 789. Também aceito troca por Samsung Galaxy S21. 📱',
-      likes: 0,
-      comments: 0,
-      bookmarked: false,
-    },
-  ];
+  const { token, user } = useAuth();
+  const [activeTab, setActiveTab] = useState<'all' | 'nearby' | 'recent'>('all');
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const handleNavigation = (tab: string) => {
-    setActiveTab(tab);
     if (tab === 'home') {
       router.push('/home');
     } else if (tab === 'locations') {
@@ -55,6 +35,96 @@ const AnnouncementsScreen = () => {
 
   const handleNewAnnouncement = () => {
     router.push('/new-announcement');
+  };
+
+  useEffect(() => {
+    if (!token) {
+      router.replace('/login');
+      return;
+    }
+
+    const fetchAnnouncements = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await api.get<{ announcements: Announcement[] }>('/announcements', token);
+        setAnnouncements(response.announcements);
+      } catch (err) {
+        setError((err as Error).message ?? 'Não foi possível carregar os anúncios');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchAnnouncements();
+  }, [token, router]);
+
+  const filteredAnnouncements = useMemo(() => {
+    if (activeTab === 'recent') {
+      return [...announcements].sort(
+        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+      );
+    }
+    // Para 'nearby' e 'all', por agora devolvemos a lista completa.
+    return announcements;
+  }, [announcements, activeTab]);
+
+  const toggleLike = async (announcement: Announcement) => {
+    if (!token) return;
+
+    const isLiked = announcement.reactions.some((reaction) => reaction.userId === user?.id);
+
+    try {
+      if (isLiked) {
+        await api.delete(`/announcements/${announcement.id}/like`, token);
+      } else {
+        await api.post(`/announcements/${announcement.id}/like`, {}, token);
+      }
+
+      setAnnouncements((prev) =>
+        prev.map((item) =>
+          item.id === announcement.id
+            ? {
+                ...item,
+                reactions: isLiked
+                  ? item.reactions.filter((reaction) => reaction.userId !== user?.id)
+                  : [...item.reactions, { id: `${Date.now()}`, userId: user?.id ?? '', type: 'LIKE' }],
+              }
+            : item,
+        ),
+      );
+    } catch (err) {
+      Alert.alert('Erro', (err as Error).message ?? 'Não foi possível atualizar o like');
+    }
+  };
+
+  const toggleBookmark = async (announcement: Announcement) => {
+    if (!token) return;
+
+    const isBookmarked = announcement.bookmarks.some((bookmark) => bookmark.userId === user?.id);
+
+    try {
+      if (isBookmarked) {
+        await api.delete(`/announcements/${announcement.id}/bookmark`, token);
+      } else {
+        await api.post(`/announcements/${announcement.id}/bookmark`, {}, token);
+      }
+
+      setAnnouncements((prev) =>
+        prev.map((item) =>
+          item.id === announcement.id
+            ? {
+                ...item,
+                bookmarks: isBookmarked
+                  ? item.bookmarks.filter((bookmark) => bookmark.userId !== user?.id)
+                  : [...item.bookmarks, { id: `${Date.now()}`, userId: user?.id ?? '' }],
+              }
+            : item,
+        ),
+      );
+    } catch (err) {
+      Alert.alert('Erro', (err as Error).message ?? 'Não foi possível atualizar o marcador');
+    }
   };
 
   return (
@@ -99,62 +169,80 @@ const AnnouncementsScreen = () => {
 
       {/* Announcements List */}
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {announcements.map((announcement) => (
-          <View key={announcement.id} style={styles.announcementCard}>
-            {/* Header */}
-            <View style={styles.announcementHeader}>
-              <View style={styles.authorInfo}>
-                <View style={styles.avatar}>
-                  <Text style={styles.avatarText}>{announcement.avatar}</Text>
-                </View>
-                <View style={styles.authorDetails}>
-                  <View style={styles.authorNameRow}>
-                    <Text style={styles.authorName}>{announcement.author}</Text>
-                    {announcement.verified && (
-                      <View style={styles.verifiedBadge}>
-                        <Text style={styles.verifiedText}>Verificado</Text>
+        {loading && <ActivityIndicator color="#06B6D4" style={{ marginTop: 24 }} />}
+
+        {error && !loading && (
+          <Text style={{ color: '#EF4444', marginHorizontal: 16, marginBottom: 12 }}>{error}</Text>
+        )}
+
+        {!loading && !error && filteredAnnouncements.length === 0 && (
+          <Text style={{ color: '#6B7280', marginHorizontal: 16 }}>Ainda não há anúncios.</Text>
+        )}
+
+        {!loading &&
+          !error &&
+          filteredAnnouncements.map((announcement) => {
+            const isLiked = announcement.reactions.some((reaction) => reaction.userId === user?.id);
+            const isBookmarked = announcement.bookmarks.some((bookmark) => bookmark.userId === user?.id);
+            const avatar = announcement.author.username.charAt(0).toUpperCase();
+
+            return (
+              <View key={announcement.id} style={styles.announcementCard}>
+                {/* Header */}
+                <View style={styles.announcementHeader}>
+                  <View style={styles.authorInfo}>
+                    <View style={styles.avatar}>
+                      <Text style={styles.avatarText}>{avatar}</Text>
+                    </View>
+                    <View style={styles.authorDetails}>
+                      <View style={styles.authorNameRow}>
+                        <Text style={styles.authorName}>{announcement.author.username}</Text>
                       </View>
-                    )}
-                    {announcement.badge && (
-                      <View style={styles.sellerBadge}>
-                        <Text style={styles.sellerText}>{announcement.badge}</Text>
-                      </View>
-                    )}
+                      <Text style={styles.timeText}>
+                        {new Date(announcement.createdAt).toLocaleString()}
+                      </Text>
+                    </View>
                   </View>
-                  <Text style={styles.timeText}>{announcement.time}</Text>
+                  {announcement.location && (
+                    <View style={styles.locationBadge}>
+                      <Text style={styles.locationIcon}>📍</Text>
+                      <Text style={styles.locationText}>{announcement.location.name}</Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* Content */}
+                <Text style={styles.announcementContent}>{announcement.content}</Text>
+
+                {/* Footer */}
+                <View style={styles.announcementFooter}>
+                  <View style={styles.footerLeft}>
+                    <TouchableOpacity
+                      style={styles.actionButton}
+                      onPress={() => toggleLike(announcement)}
+                    >
+                      <Text style={styles.actionIcon}>{isLiked ? '❤️' : '🤍'}</Text>
+                      <Text style={styles.actionText}>{announcement.reactions.length}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity style={styles.actionButton}>
+                      <Text style={styles.actionIcon}>💬</Text>
+                      <Text style={styles.actionText}>0</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.actionButton}
+                      onPress={() => toggleBookmark(announcement)}
+                    >
+                      <Text style={styles.actionIcon}>{isBookmarked ? '🔖' : '📄'}</Text>
+                      <Text style={styles.actionText}>{isBookmarked ? '1' : ''}</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <TouchableOpacity onPress={() => router.push(`/announcement/${announcement.id}`)}>
+                    <Text style={styles.seeMoreText}>Ver mais</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
-              <View style={styles.locationBadge}>
-                <Text style={styles.locationIcon}>📍</Text>
-                <Text style={styles.locationText}>{announcement.location}</Text>
-              </View>
-            </View>
-
-            {/* Content */}
-            <Text style={styles.announcementContent}>{announcement.content}</Text>
-
-            {/* Footer */}
-            <View style={styles.announcementFooter}>
-              <View style={styles.footerLeft}>
-                <TouchableOpacity style={styles.actionButton}>
-                  <Text style={styles.actionIcon}>❤️</Text>
-                  <Text style={styles.actionText}>{announcement.likes}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.actionButton}>
-                  <Text style={styles.actionIcon}>💬</Text>
-                  <Text style={styles.actionText}>{announcement.comments}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.actionButton}>
-                  <Text style={styles.actionIcon}>🔖</Text>
-                  <Text style={styles.actionText}>{announcement.bookmarked ? '1' : ''}</Text>
-                </TouchableOpacity>
-              </View>
-              <TouchableOpacity>
-                <Text style={styles.seeMoreText}>Ver mais</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        ))}
+            );
+          })}
 
         <View style={{ height: 100 }} />
       </ScrollView>

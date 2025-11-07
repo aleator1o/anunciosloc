@@ -8,19 +8,27 @@ import {
   StyleSheet,
   SafeAreaView,
   StatusBar,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
+import { useAuth } from './context/AuthContext';
 
 const LoginScreen = () => {
 
  const router = useRouter();
-  
-    
-  const [username, setUsername] = useState('');
+  const { login, loading } = useAuth();
+
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  const handleLogin = () => {
-    console.log('Login attempt:', { username, password });
-    router.push('/home');
+  const handleLogin = async () => {
+    try {
+      await login(email, password);
+      Alert.alert('Sucesso', 'Sessão iniciada com sucesso');
+      router.replace('/home');
+    } catch (error) {
+      Alert.alert('Erro', (error as Error).message ?? 'Falha ao iniciar sessão');
+    }
   };
 
   const handleRegister = () => {
@@ -37,15 +45,16 @@ const LoginScreen = () => {
 
         {/* Form */}
         <View style={styles.form}>
-          {/* Username Input */}
+          {/* Email Input */}
           <TextInput
             style={styles.input}
-            placeholder="Nome de utilizador"
+            placeholder="Email"
             placeholderTextColor="#9CA3AF"
-            value={username}
-            onChangeText={setUsername}
+            value={email}
+            onChangeText={setEmail}
             autoCapitalize="none"
             autoCorrect={false}
+            keyboardType="email-address"
           />
 
           {/* Password Input */}
@@ -65,8 +74,13 @@ const LoginScreen = () => {
             style={styles.loginButton}
             onPress={handleLogin}
             activeOpacity={0.8}
+            disabled={loading}
           >
-            <Text style={styles.loginButtonText}>Iniciar Sessão</Text>
+            {loading ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.loginButtonText}>Iniciar Sessão</Text>
+            )}
           </TouchableOpacity>
 
           {/* Register Link */}
@@ -75,6 +89,9 @@ const LoginScreen = () => {
               Não tem uma conta? <Text style={styles.registerLinkBold}>Registar-se</Text>
             </Text>
           </TouchableOpacity>
+      <TouchableOpacity onPress={() => router.push('/forgot-password')} style={styles.registerLink}>
+        <Text style={styles.registerLinkText}>Esqueceu a palavra-passe?</Text>
+      </TouchableOpacity>
         </View>
       </View>
 
