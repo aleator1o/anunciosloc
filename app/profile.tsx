@@ -13,18 +13,18 @@ import {
 
 const ProfileScreen = () => {
   const router = useRouter();
-  const [, setActiveTab] = useState('profile');
+  const [activeTab, setActiveTab] = useState('profile');
 
-const handleNavigation = (tab: string) => {
-  setActiveTab(tab);
-  if (tab === 'announcements') {
-    router.push('/announcements' as any);
-  } else if (tab === 'locations') {
-    // router.push('/locations' as any);
-  } else if (tab === 'profile') {
-    router.push('/profile' as any);
-  }
-};
+  const handleNavigation = (tab: string) => {
+    setActiveTab(tab);
+    if (tab === 'home') {
+      router.push('/home');
+    } else if (tab === 'announcements') {
+      router.push('/announcements');
+    } else if (tab === 'locations') {
+      router.push('/locations');
+    }
+  };
 
   const handleEditProfile = () => {
     Alert.alert('Editar Perfil', 'Funcionalidade em desenvolvimento');
@@ -40,7 +40,11 @@ const handleNavigation = (tab: string) => {
       'Tem certeza que deseja sair?',
       [
         { text: 'Cancelar', style: 'cancel' },
-        { text: 'Sair', style: 'destructive', onPress: () => console.log('Logout') }
+        { 
+          text: 'Sair', 
+          style: 'destructive', 
+          onPress: () => router.push('/login')
+        }
       ]
     );
   };
@@ -64,7 +68,6 @@ const handleNavigation = (tab: string) => {
           style={styles.backButton}
           onPress={() => router.back()}
         >
-          <Text style={styles.backIcon}>←</Text>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Perfil</Text>
         <View style={styles.placeholder} />
@@ -88,7 +91,7 @@ const handleNavigation = (tab: string) => {
 
           <TouchableOpacity style={styles.infoCard}>
             <View style={styles.iconContainer}>
-              <Text style={styles.iconText}>↻</Text>
+              <Text style={styles.iconText}>✉️</Text>
             </View>
             <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>Email</Text>
@@ -104,7 +107,7 @@ const handleNavigation = (tab: string) => {
           
           <TouchableOpacity style={styles.infoCard}>
             <View style={styles.iconContainer}>
-              <Text style={styles.iconText}>📍</Text>
+              <Text style={styles.iconText}>💼</Text>
             </View>
             <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>Profissão</Text>
@@ -115,7 +118,7 @@ const handleNavigation = (tab: string) => {
 
           <TouchableOpacity style={styles.infoCard}>
             <View style={styles.iconContainer}>
-              <Text style={styles.iconText}>📍</Text>
+              <Text style={styles.iconText}>⚽</Text>
             </View>
             <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>Clube</Text>
@@ -126,7 +129,7 @@ const handleNavigation = (tab: string) => {
 
           <TouchableOpacity style={styles.infoCard}>
             <View style={styles.iconContainer}>
-              <Text style={styles.iconText}>📍</Text>
+              <Text style={styles.iconText}>🎂</Text>
             </View>
             <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>Idade</Text>
@@ -137,7 +140,7 @@ const handleNavigation = (tab: string) => {
 
           <TouchableOpacity style={styles.infoCard}>
             <View style={styles.iconContainer}>
-              <Text style={styles.iconText}>📍</Text>
+              <Text style={styles.iconText}>🏙️</Text>
             </View>
             <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>Cidade</Text>
@@ -149,11 +152,11 @@ const handleNavigation = (tab: string) => {
 
         {/* Actions Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Ações</Text>
+          <Text style={styles.sectionTitle}>Acções</Text>
           
           <TouchableOpacity style={styles.infoCard} onPress={handleEditProfile}>
             <View style={styles.iconContainer}>
-              <Text style={styles.iconText}>👤</Text>
+              <Text style={styles.iconText}>✏️</Text>
             </View>
             <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>Editar Perfil</Text>
@@ -166,7 +169,7 @@ const handleNavigation = (tab: string) => {
 
           <TouchableOpacity style={styles.infoCard} onPress={handleSettings}>
             <View style={styles.iconContainer}>
-              <Text style={styles.iconText}>🛡️</Text>
+              <Text style={styles.iconText}>⚙️</Text>
             </View>
             <View style={styles.infoContent}>
               <Text style={styles.infoLabel}>Configurações</Text>
@@ -182,7 +185,7 @@ const handleNavigation = (tab: string) => {
             onPress={handleLogout}
           >
             <View style={[styles.iconContainer, styles.logoutIconContainer]}>
-              <Text style={styles.iconText}>↪</Text>
+              <Text style={styles.iconText}>🚪</Text>
             </View>
             <View style={styles.infoContent}>
               <Text style={[styles.infoLabel, styles.logoutText]}>

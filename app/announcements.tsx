@@ -12,7 +12,7 @@ import {
 
 const AnnouncementsScreen = () => {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState('all');
+  const [activeTab, setActiveTab] = useState('announcements');
 
   const announcements = [
     {
@@ -42,8 +42,15 @@ const AnnouncementsScreen = () => {
     },
   ];
 
-  const handleGoBack = () => {
-    router.back();
+  const handleNavigation = (tab: string) => {
+    setActiveTab(tab);
+    if (tab === 'home') {
+      router.push('/home');
+    } else if (tab === 'locations') {
+      router.push('/locations');
+    } else if (tab === 'profile') {
+      router.push('/profile');
+    }
   };
 
   const handleNewAnnouncement = () => {
@@ -53,11 +60,9 @@ const AnnouncementsScreen = () => {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-      
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={handleGoBack} style={styles.backButton}>
-          <Text style={styles.backIcon}></Text>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Anúncios</Text>
         <TouchableOpacity onPress={handleNewAnnouncement} style={styles.addButton}>
@@ -156,28 +161,40 @@ const AnnouncementsScreen = () => {
 
       {/* Bottom Navigation */}
       <View style={styles.bottomNav}>
-        <TouchableOpacity style={styles.navItem}>
+        <TouchableOpacity 
+          style={styles.navItem}
+          onPress={() => handleNavigation('home')}
+        >
           <View style={styles.navIcon}>
             <Text style={styles.navIconText}>🏠</Text>
           </View>
           <Text style={styles.navText}>Início</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={[styles.navItem, styles.navItemActive]}>
+        <TouchableOpacity 
+          style={[styles.navItem, styles.navItemActive]}
+          onPress={() => handleNavigation('announcements')}
+        >
           <View style={styles.navIconActive}>
             <Text style={styles.navIconText}>📢</Text>
           </View>
           <Text style={styles.navTextActive}>Anúncios</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.navItem}>
+        <TouchableOpacity 
+          style={styles.navItem}
+          onPress={() => handleNavigation('locations')}
+        >
           <View style={styles.navIcon}>
             <Text style={styles.navIconText}>📍</Text>
           </View>
           <Text style={styles.navText}>Locais</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.navItem}>
+        <TouchableOpacity 
+          style={styles.navItem}
+          onPress={() => handleNavigation('profile')}
+        >
           <View style={styles.navIcon}>
             <Text style={styles.navIconText}>👤</Text>
           </View>

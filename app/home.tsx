@@ -1,5 +1,7 @@
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
 import {
   View,
   Text,
@@ -60,14 +62,17 @@ const HomeScreen = () => {
     if (tab === 'announcements') {
       router.push('/announcements');
     } else if (tab === 'locations') {
-      //router.push('/locations');
+      router.push('/locations');
     } else if (tab === 'profile') {
-      router.push('/login');
+      router.push('/profile');
     }
-  };
+  }
+
+  const insets = useSafeAreaInsets();
+
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       
       {/* Header */}
