@@ -38,6 +38,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       setUser(response.user);
       setToken(response.token);
+    } catch (error: any) {
+      console.error("[AuthContext] Erro no login:", error);
+      // Re-throw para que o componente possa tratar
+      throw error;
     } finally {
       setLoading(false);
     }
@@ -53,6 +57,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       setUser(response.user);
       setToken(response.token);
+    } catch (error: any) {
+      console.error("[AuthContext] Erro no registro:", error);
+      // Re-throw para que o componente possa tratar
+      throw error;
     } finally {
       setLoading(false);
     }

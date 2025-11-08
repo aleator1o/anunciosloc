@@ -43,8 +43,15 @@ const ProfileScreen = () => {
         text: 'Sair',
         style: 'destructive',
         onPress: () => {
+          console.log('[Profile] Iniciando logout...');
           logout();
-          router.replace('/login');
+          console.log('[Profile] Logout executado, navegando para login...');
+          // Usar router.push primeiro e depois replace para garantir que funcione
+          router.push('/login');
+          // Forçar navegação após um pequeno delay
+          setTimeout(() => {
+            router.replace('/login');
+          }, 200);
         },
       },
     ]);

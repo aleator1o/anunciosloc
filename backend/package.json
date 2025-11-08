@@ -10,7 +10,8 @@
     "lint": "tsc --noEmit",
     "prisma:migrate": "prisma migrate dev",
     "prisma:generate": "prisma generate",
-    "seed": "prisma db seed"
+    "seed": "prisma db seed",
+    "check-db": "ts-node scripts/check-db.ts"
   },
   "keywords": [],
   "author": "",
