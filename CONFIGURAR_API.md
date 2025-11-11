@@ -111,3 +111,4 @@ npm start
 - Para **dispositivo físico Android**: Precisa configurar `EXPO_PUBLIC_API_URL` com o IP da máquina
 - Para **iOS**: Usa `127.0.0.1` automaticamente (localhost)
 
+

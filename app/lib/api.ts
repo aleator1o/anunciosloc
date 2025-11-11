@@ -145,3 +145,27 @@ class ApiClient {
 export const api = new ApiClient(DEFAULT_BASE_URL);
 export const API_BASE_URL = DEFAULT_BASE_URL;
 
+// --------- Perfil (pares chave-valor) ---------
+export interface ProfileAttribute {
+  id: string;
+  key: string;
+  value: string;
+  createdAt: string;
+}
+
+export async function fetchProfileAttributes(token: string) {
+  return api.get<{ attributes: ProfileAttribute[] }>("/profile/attributes", token);
+}
+
+export async function upsertProfileAttribute(token: string, key: string, value: string) {
+  return api.post<{ attribute: ProfileAttribute }, { key: string; value: string }>("/profile/attributes", { key, value }, token);
+}
+
+export async function deleteProfileAttribute(token: string, key: string) {
+  return api.delete<void>(`/profile/attributes/${encodeURIComponent(key)}`, token);
+}
+
+export async function fetchPublicProfileKeys() {
+  return api.get<{ keys: string[] }>("/profile/keys");
+}
+

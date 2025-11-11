@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -14,11 +14,24 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { useAuth } from './context/AuthContext';
-import { api } from './lib/api';
+import { api, fetchPublicProfileKeys } from './lib/api';
 
 const NewAnnouncementScreen = () => {
   const router = useRouter();
   const { token } = useAuth();
+  const [policyType, setPolicyType] = useState<'WHITELIST' | 'BLACKLIST'>('WHITELIST');
+  const [restrictions, setRestrictions] = useState<Array<{ key: string; value: string }>>([]);
+  const [availableKeys, setAvailableKeys] = useState<string[]>([]);
+
+  useEffect(() => {
+    const loadKeys = async () => {
+      try {
+        const res = await fetchPublicProfileKeys();
+        setAvailableKeys(res.keys);
+      } catch {}
+    };
+    loadKeys();
+  }, []);
   const [message, setMessage] = useState('');
   const [deliveryMode, setDeliveryMode] = useState<'CENTRALIZED' | 'DECENTRALIZED'>('CENTRALIZED');
   const [visibility, setVisibility] = useState<'PUBLIC' | 'PRIVATE'>('PUBLIC');
@@ -51,6 +64,8 @@ const NewAnnouncementScreen = () => {
           content: message,
           deliveryMode,
           visibility,
+          policyType,
+          policyRestrictions: restrictions.filter(r => r.key.trim() && r.value.trim()),
           locationId: selectedLocation || undefined,
           startsAt: publishNow || !startDate ? undefined : new Date(startDate).toISOString(),
           endsAt: publishNow || !endDate ? undefined : new Date(endDate).toISOString(),
@@ -106,6 +121,93 @@ const NewAnnouncementScreen = () => {
           <Text style={styles.characterCount}>Máximo 500 caracteres</Text>
         </View>
 
+        {/* Policy Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Política de Destinatários</Text>
+          
+          <TouchableOpacity 
+            style={[styles.radioOption, policyType === 'WHITELIST' && styles.radioOptionSelected]}
+            onPress={() => setPolicyType('WHITELIST')}
+          >
+            <View style={styles.radioContent}>
+              <Text style={styles.radioIcon}>✅</Text>
+              <View style={styles.radioTextContainer}>
+                <Text style={styles.radioTitle}>Whitelist</Text>
+                <Text style={styles.radioDescription}>Apenas quem corresponde às restrições recebe</Text>
+              </View>
+            </View>
+            <View style={[styles.radioCircle, policyType === 'WHITELIST' && styles.radioCircleSelected]}>
+              {policyType === 'WHITELIST' && <View style={styles.radioInner} />}
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.radioOption, policyType === 'BLACKLIST' && styles.radioOptionSelected]}
+            onPress={() => setPolicyType('BLACKLIST')}
+          >
+            <View style={styles.radioContent}>
+              <Text style={styles.radioIcon}>⛔</Text>
+              <View style={styles.radioTextContainer}>
+                <Text style={styles.radioTitle}>Blacklist</Text>
+                <Text style={styles.radioDescription}>Todos recebem, exceto quem corresponde às restrições</Text>
+              </View>
+            </View>
+            <View style={[styles.radioCircle, policyType === 'BLACKLIST' && styles.radioCircleSelected]}>
+              {policyType === 'BLACKLIST' && <View style={styles.radioInner} />}
+            </View>
+          </TouchableOpacity>
+
+          <Text style={[styles.label, { marginTop: 8 }]}>Restrições (pares chave-valor)</Text>
+          {restrictions.map((r, idx) => (
+            <View key={idx} style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
+              <TextInput
+                style={[styles.textArea, { flex: 1, minHeight: undefined, paddingVertical: 10 }]}
+                placeholder="Chave (ex.: Profissao)"
+                placeholderTextColor="#9CA3AF"
+                value={r.key}
+                onChangeText={(t) => {
+                  const copy = [...restrictions];
+                  copy[idx] = { ...copy[idx], key: t };
+                  setRestrictions(copy);
+                }}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <TextInput
+                style={[styles.textArea, { flex: 1, minHeight: undefined, paddingVertical: 10 }]}
+                placeholder="Valor (ex.: Estudante)"
+                placeholderTextColor="#9CA3AF"
+                value={r.value}
+                onChangeText={(t) => {
+                  const copy = [...restrictions];
+                  copy[idx] = { ...copy[idx], value: t };
+                  setRestrictions(copy);
+                }}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <TouchableOpacity
+                onPress={() => setRestrictions(restrictions.filter((_, i) => i !== idx))}
+                style={{ backgroundColor: '#FEE2E2', paddingHorizontal: 12, borderRadius: 10, justifyContent: 'center' }}
+              >
+                <Text style={{ color: '#DC2626', fontWeight: '600' }}>Rem</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity
+              onPress={() => setRestrictions([...restrictions, { key: '', value: '' }])}
+              style={{ backgroundColor: '#E5E7EB', paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10 }}
+            >
+              <Text style={{ color: '#111827', fontWeight: '600' }}>+ Adicionar restrição</Text>
+            </TouchableOpacity>
+            {availableKeys.length > 0 && (
+              <View style={{ justifyContent: 'center' }}>
+                <Text style={{ color: '#6B7280' }}>Chaves conhecidas: {availableKeys.slice(0, 5).join(', ')}...</Text>
+              </View>
+            )}
+          </View>
+        </View>
         {/* Location Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Localização</Text>

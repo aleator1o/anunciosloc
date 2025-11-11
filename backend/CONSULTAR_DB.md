@@ -134,3 +134,4 @@ npm run check-db
 
 Este comando mostra todos os dados de forma organizada e fácil de ler!
 
+

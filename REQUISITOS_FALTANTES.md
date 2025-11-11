@@ -1,0 +1,454 @@
+# 📋 Lista de Requisitos Faltantes - AnunciosLoc
+
+## ✅ Funcionalidades Implementadas
+
+### F1. Registar Utilizador ✅
+- Backend: POST /api/auth/register
+- Frontend: Tela de registro funcionando
+
+### F2. Log in/out ✅
+- Backend: POST /api/auth/login, GET /api/auth/me
+- Frontend: Tela de login e logout funcionando
+
+### F3. Listar / Criar / Remover Locais ✅
+- Backend: GET/POST/DELETE /api/locations
+- Frontend: Telas de listagem, criação e remoção
+
+### F4. Registar / Remover Anúncio ✅
+- Backend: POST/DELETE /api/announcements
+- Frontend: Criação e remoção de anúncios
+
+### F5. Visualizar Anúncio ✅
+- Backend: GET /api/announcements/:id
+- Frontend: Tela de detalhes do anúncio
+
+### Estrutura Básica ✅
+- Schema do banco de dados com modelos principais
+- Sistema de autenticação com JWT
+- API REST funcional
+
+---
+
+## ❌ Funcionalidades Faltantes
+
+### 🔴 CRÍTICO - Funcionalidades Básicas
+
+#### F6. Editar Perfil de Utilizador com Pares Chave-Valor
+**Status:** ❌ NÃO IMPLEMENTADO
+
+**Requisitos do Enunciado:**
+- Cada utilizador tem um perfil com pares chave-valor (ex: "club=Real Madrid", "Profissao=Estudante")
+- Utilizador pode adicionar/remover pares chave-valor
+- Perfis são privados, mas **chaves são públicas**
+- Servidor mantém lista de todas as chaves públicas
+- Endpoint para listar todas as chaves disponíveis
+
+**O que falta:**
+1. **Backend:**
+   - Modelo `UserProfile` no schema Prisma com campos `key` e `value`
+   - Endpoint POST /api/profile/attributes (adicionar chave-valor)
+   - Endpoint DELETE /api/profile/attributes/:key (remover chave-valor)
+   - Endpoint GET /api/profile/attributes (listar chaves do utilizador)
+   - Endpoint GET /api/profile/keys (listar TODAS as chaves públicas - sem valores)
+   - Atualizar modelo User para ter relação com UserProfile
+
+2. **Frontend:**
+   - Tela de edição de perfil com gestão de chaves-valor
+   - Interface para adicionar/remover pares
+   - Lista de todas as chaves públicas disponíveis
+   - Atualizar tela de perfil para mostrar atributos dinâmicos
+
+---
+
+#### Políticas de Mensagens (Whitelist/Blacklist)
+**Status:** ❌ NÃO IMPLEMENTADO
+
+**Requisitos do Enunciado:**
+- Mensagens devem ter política: **WHITELIST** ou **BLACKLIST**
+- Whitelist: apenas utilizadores que correspondem à lista recebem
+- Blacklist: todos recebem EXCETO os que correspondem à lista
+- Lista de restrição: array de pares chave-valor do perfil (ex: `{"Profissao": "Estudante"}`)
+- Política whitelist vazia = todos recebem
+
+**O que falta:**
+1. **Backend:**
+   - Atualizar modelo `Announcement` no schema:
+     - Campo `policyType` (WHITELIST/BLACKLIST)
+     - Campo `policyRestrictions` (JSON com array de pares chave-valor)
+   - Lógica de filtro de mensagens baseada em política
+   - Endpoint para obter mensagens filtradas por política
+
+2. **Frontend:**
+   - Interface para selecionar política (Whitelist/Blacklist)
+   - Interface para adicionar restrições (chave-valor)
+   - Seleção de chaves da lista pública de chaves
+
+**Nota:** Atualmente só existe `visibility: PUBLIC/PRIVATE`, que não atende aos requisitos.
+
+---
+
+#### Sistema de Recebimento de Mensagens
+**Status:** ❌ NÃO IMPLEMENTADO
+
+**Requisitos do Enunciado:**
+- Quando utilizador visita um local, deve receber notificação de mensagens disponíveis
+- Utilizador pode **receber explicitamente** a mensagem
+- Se receber: mensagem fica disponível mesmo após sair do local ou expirar
+- Se não receber: mensagem desaparece quando sair do local ou expirar
+
+**O que falta:**
+1. **Backend:**
+   - Modelo `ReceivedAnnouncement` para rastrear mensagens recebidas
+   - Endpoint POST /api/announcements/:id/receive (marcar como recebida)
+   - Endpoint GET /api/announcements/available (listar mensagens disponíveis no local atual)
+   - Lógica para verificar se mensagem foi recebida antes de mostrar
+
+2. **Frontend:**
+   - Sistema de notificações quando há mensagens disponíveis
+   - Botão "Receber" nas mensagens
+   - Lista de mensagens recebidas (disponíveis sempre)
+   - Lista de mensagens disponíveis (apenas no local)
+
+---
+
+#### Detecção de Localização (GPS/WiFi)
+**Status:** ❌ NÃO IMPLEMENTADO
+
+**Requisitos do Enunciado:**
+- Cliente deve anunciar periodicamente sua localização ao servidor
+- Localização: coordenadas GPS (latitude, longitude) + IDs WiFi visíveis
+- Servidor compara localização do cliente com locais cadastrados
+- Servidor notifica cliente quando há mensagens disponíveis no local atual
+
+**O que falta:**
+1. **Backend:**
+   - Endpoint POST /api/location/update (atualizar localização do utilizador)
+   - Serviço que compara localização com locais cadastrados
+   - Serviço que verifica mensagens disponíveis baseado em:
+     - Localização do utilizador
+     - Política da mensagem (whitelist/blacklist)
+     - Perfil do utilizador
+     - Janela de tempo (startsAt/endsAt)
+   - Sistema de notificações push (WebSocket ou polling)
+
+2. **Frontend:**
+   - Permissões de localização GPS
+   - Leitura de WiFi IDs disponíveis
+   - Envio periódico de localização ao servidor
+   - Sistema de notificações locais
+   - Verificação automática de mensagens disponíveis
+
+---
+
+#### Modo de Entrega Descentralizado (WiFi Direct)
+**Status:** ❌ NÃO IMPLEMENTADO
+
+**Requisitos do Enunciado:**
+- Modo CENTRALIZED: mensagens via servidor ✅ (parcialmente)
+- Modo DECENTRALIZED: mensagens via WiFi Direct ❌
+- No modo descentralizado:
+  - Publicador mantém mensagem no dispositivo
+  - Publicador verifica se está no local de destino
+  - Publicador escaneia dispositivos próximos
+  - Publicador envia mensagem para dispositivos que correspondem à política
+  - Dispositivos receptores apenas mostram (não encaminham)
+
+**O que falta:**
+1. **Backend:**
+   - Sistema de sincronização para modo descentralizado
+   - Endpoint para obter mensagens do publicador
+
+2. **Frontend:**
+   - Implementação WiFi Direct (usando Termite ou biblioteca)
+   - Descoberta de dispositivos próximos
+   - Envio de mensagens via WiFi Direct
+   - Recebimento de mensagens via WiFi Direct
+   - Verificação de política antes de receber
+   - Cache local de mensagens descentralizadas
+
+**Nota:** Requer emulador Termite ou dispositivo físico com WiFi Direct.
+
+---
+
+### 🟡 IMPORTANTE - Funcionalidades Avançadas
+
+#### Roteamento de Retransmissão (Mulas)
+**Status:** ❌ NÃO IMPLEMENTADO
+
+**Requisitos do Enunciado:**
+- Mensagens podem ser transportadas por "mulas" (nós intermediários)
+- Mula: nó que transporta mensagem de terceiros para o destino
+- Mula pode ser eleita mesmo sem corresponder à política
+- Mula tem espaço limitado (configurável pelo utilizador)
+- Máximo de 1 salto (publicador → mula → destino)
+
+**O que falta:**
+1. **Backend:**
+   - Sistema de eleição de mulas
+   - Gestão de espaço de mulas
+   - Roteamento de mensagens via mulas
+
+2. **Frontend:**
+   - Configuração de espaço de mula
+   - Eleição de mulas
+   - Transporte de mensagens via mulas
+   - Algoritmo de seleção de mulas
+
+---
+
+#### Segurança
+**Status:** ❌ NÃO IMPLEMENTADO
+
+**Requisitos do Enunciado:**
+1. Comunicação segura cliente-servidor (HTTPS/TLS)
+2. Autenticação de mensagens (verificar que mensagem foi publicada por utilizador específico)
+3. Integridade de mensagens (verificar que mensagem não foi adulterada)
+
+**O que falta:**
+1. **Backend:**
+   - HTTPS/TLS para comunicação
+   - Assinatura digital de mensagens
+   - Verificação de assinaturas
+   - Criptografia de mensagens
+
+2. **Frontend:**
+   - Certificados SSL
+   - Verificação de assinaturas
+   - Validação de integridade
+
+---
+
+### 🟢 MELHORIAS - Funcionalidades Parciais
+
+#### Modo Centralizado - Melhorias
+**Status:** ⚠️ PARCIALMENTE IMPLEMENTADO
+
+**O que falta:**
+- Sistema de notificações quando há mensagens disponíveis
+- Polling periódico ou WebSocket para notificações
+- Verificação automática de mensagens baseada em localização
+
+#### Remoção de Locais
+**Status:** ⚠️ PARCIALMENTE IMPLEMENTADO
+
+**Requisitos do Enunciado:**
+- Utilizadores podem remover locais criados por outros utilizadores
+
+**O que falta:**
+- Backend permite remoção apenas pelo owner
+- Frontend não permite remover locais de outros
+- Ajustar permissões no backend
+
+---
+
+## 📊 Resumo
+
+### Funcionalidades Básicas: 5/6 (83%)
+- ✅ F1. Registar utilizador
+- ✅ F2. Log in/out
+- ✅ F3. Listar / Criar / Remover locais
+- ✅ F4. Registar / Remover anúncio
+- ✅ F5. Visualizar anúncio
+- ❌ F6. Editar perfil com chaves-valor
+
+### Sistema de Perfis: 0/4 (0%)
+- ❌ Pares chave-valor no perfil
+- ❌ Adicionar/remover pares
+- ❌ Listar chaves públicas
+- ❌ Gestão de perfis
+
+### Políticas de Mensagens: 0/2 (0%)
+- ❌ Whitelist/Blacklist
+- ❌ Restrições por perfil
+
+### Sistema de Recebimento: 0/3 (0%)
+- ❌ Receber mensagens explicitamente
+- ❌ Notificações de mensagens disponíveis
+- ❌ Persistência de mensagens recebidas
+
+### Localização: 0/3 (0%)
+- ❌ Detecção GPS
+- ❌ Detecção WiFi IDs
+- ❌ Anúncio periódico de localização
+
+### Modo Descentralizado: 0/5 (0%)
+- ❌ WiFi Direct
+- ❌ Descoberta de dispositivos
+- ❌ Envio via P2P
+- ❌ Recebimento via P2P
+- ❌ Verificação de política
+
+### Funcionalidades Avançadas: 0/2 (0%)
+- ❌ Roteamento de retransmissão (mulas)
+- ❌ Segurança (HTTPS, assinaturas)
+
+---
+
+## 🎯 Prioridades de Implementação
+
+### Prioridade 1 - Funcionalidades Básicas Essenciais
+1. **Sistema de Perfis (F6)** - Crítico para políticas de mensagens
+2. **Políticas Whitelist/Blacklist** - Requisito básico do enunciado
+3. **Sistema de Recebimento** - Core da funcionalidade
+
+### Prioridade 2 - Funcionalidades de Localização
+4. **Detecção de Localização** - Necessário para notificações
+5. **Anúncio Periódico de Localização** - Necessário para modo centralizado
+
+### Prioridade 3 - Modo Descentralizado
+6. **WiFi Direct** - Funcionalidade avançada básica
+7. **Sistema de Entrega P2P** - Completa modo descentralizado
+
+### Prioridade 4 - Funcionalidades Avançadas
+8. **Roteamento de Retransmissão** - Funcionalidade avançada
+9. **Segurança** - Funcionalidade avançada
+
+---
+
+## 📝 Notas Importantes
+
+1. **Plataforma:** O projeto atual usa Expo/React Native, mas o enunciado pede Android nativo (Java). Pode ser necessário migrar ou justificar a escolha.
+
+2. **WiFi Direct:** Requer emulador Termite ou dispositivo físico. Não funciona no Expo Go.
+
+3. **Localização:** Requer permissões e APIs nativas do Android.
+
+4. **Notificações:** Requer sistema de notificações push ou polling.
+
+5. **Testes:** Projeto deve ser testado no emulador Termite conforme enunciado.
+
+---
+
+## 🔄 Próximos Passos
+
+1. Implementar sistema de perfis (chaves-valor)
+2. Implementar políticas whitelist/blacklist
+3. Implementar sistema de recebimento de mensagens
+4. Implementar detecção de localização
+5. Implementar modo descentralizado (WiFi Direct)
+6. Implementar funcionalidades avançadas (mulas, segurança)
+
+
+
+
+o que falta implementar 
+
+Próximos passos
+Sugestão de ordem:
+1-Sistema de perfis (F6) — base para políticas
+2-Políticas whitelist/blacklist — requisito básico
+3-Sistema de recebimento — core da funcionalidade
+4-Detecção de localização — necessário para notificações
+5-Modo descentralizado — funcionalidade avançada
+6-Funcionalidades avançadas — mulas e segurança
+
+ja implementei o 1 
+o 2 falta coisas 
+
+
+Conectei o F6 (perfis) fim a fim.
+O que foi implementado:
+Backend
+Modelo UserProfile no Prisma.
+Endpoints protegidos:
+GET /api/profile/attributes
+POST /api/profile/attributes (upsert)
+DELETE /api/profile/attributes/:key
+GET /api/profile/keys
+Rotas ligadas e Swagger atualizado.
+Frontend
+app/lib/api.ts: funções para listar/criar/remover atributos e listar chaves públicas.
+app/edit-profile.tsx: ecrã para:
+Listar atributos atuais
+Adicionar/atualizar par chave-valor
+Remover par
+Sugestões de chaves com base em /profile/keys
+app/profile.tsx: mostra atributos reais do backend (sem valores fixos).
+Como testar
+Abrir app, fazer login.
+Ir a Editar Perfil:
+Adicionar: Profissao=Estudante; Clube=Real Madrid; Cidade=Luanda.
+Remover algum e confirmar atualização.
+Ir a Perfil:
+Ver os atributos listados dinamicamente.
+Via API (opcional):
+GET http://localhost:4000/api/profile/attributes (Bearer token)
+POST http://localhost:4000/api/profile/attributes body {"key":"Profissao","value":"Estudante"}
+Próximo passo sugerido
+Políticas de mensagens (Whitelist/Blacklist), que dependem destes atributos.
+Alterar Announcement para incluir: policyType e policyRestrictions (JSON).
+Backend: filtrar mensagens por política.
+Frontend: UI para escolher whitelist/blacklist e adicionar pares.
+
+
+Concluí a implementação das políticas de mensagens (Whitelist/Blacklist).
+O que foi feito
+Base de dados (Prisma)
+Announcement passou a ter policyType (WHITELIST | BLACKLIST) e policyRestrictions (JSON de pares chave-valor).
+Migração aplicada com sucesso.
+Backend
+POST /api/announcements agora aceita:
+policyType: "WHITELIST" | "BLACKLIST"
+policyRestrictions: [{ key, value }, ...]
+GET /api/announcements agora exige autenticação e:
+Filtra por janela de tempo (startsAt/endsAt)
+Compara as restrições da política com os atributos do perfil do utilizador autenticado (F6)
+Retorna apenas os anúncios compatíveis com as políticas
+Swagger atualizado (novos campos no AnnouncementCreate).
+Frontend
+new-announcement.tsx:
+UI para escolher Whitelist/Blacklist
+UI para adicionar/remover pares chave-valor de restrição
+Mostra chaves conhecidas (via /profile/keys)
+Envia policyType e policyRestrictions ao publicar
+Como testar
+Adicionar atributos ao perfil (ex.: Profissao=Estudante) em Editar Perfil.
+Criar um anúncio:
+Escolher Política: Whitelist
+Adicionar restrição: Profissao=Estudante
+Listar anúncios (Home/Anúncios):
+Deve aparecer para um utilizador com esse atributo
+Para outro utilizador sem o atributo, não deve aparecer
+Testar Blacklist invertendo a lógica.
+Próximo passo sugerido
+Sistema de “mensagens recebidas” e notificações:
+Modelo ReceivedAnnouncement
+POST /api/announcements/:id/receive
+GET /api/announcements/available baseado em localização e políticas
+Polling/WS e notificações no app
+
+Implementei o “recebimento de mensagens” no backend.
+O que foi adicionado
+Base de dados (Prisma)
+UserLocationStatus (estado atual: latitude, longitude, wifiIds, updatedAt)
+ReceivedAnnouncement (mensagens marcadas como recebidas por utilizador)
+Endpoints
+POST /api/presence/location (auth): atualiza localização GPS/WiFi atual
+GET /api/announcements/available (auth): retorna apenas os anúncios disponíveis no local atual do utilizador, aplicando:
+Janela de tempo (startsAt/endsAt)
+Geofencing (círculo com raio em metros)
+Matching de WiFi IDs
+Políticas (Whitelist/Blacklist) com atributos do perfil (F6)
+POST /api/announcements/:id/receive (auth): marca um anúncio como recebido (permanece disponível ao utilizador)
+Router e Swagger
+Rotas ligadas em routes/index.ts
+Swagger atualizado com schemas e documentação
+Como testar
+Atualizar localização:
+POST http://localhost:4000/api/presence/location
+Body: {"latitude": -8.8139, "longitude": 13.2319, "wifiIds": ["Hub WiFi Camama"]}
+Ver anúncios disponíveis no local:
+GET http://localhost:4000/api/announcements/available
+Marcar como recebido:
+POST http://localhost:4000/api/announcements/{id}/receive
+Próximo passo (frontend)
+Enviar periodicamente a localização:
+Ler GPS (Expo Location) e WiFi IDs (simulado ou manual)
+Chamar POST /presence/location
+Mostrar “Disponíveis perto de mim”:
+Consumir GET /announcements/available
+Botão “Receber” que chama POST /announcements/:id/receive
+
+faça isso, integrando esses pontos no frontend (envio da localização + lista de anúncios disponíveis + botão receber)
+
+e depois continua com outros pontos 

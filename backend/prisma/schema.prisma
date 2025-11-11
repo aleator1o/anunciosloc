@@ -13,10 +13,24 @@ model User {
   email         String         @unique
   passwordHash  String
   createdAt     DateTime       @default(now())
+  profile       UserProfile[]
   announcements Announcement[]
   reactions     Reaction[]
   bookmarks     Bookmark[]
   locations     Location[]     @relation("UserLocations")
+  presence      UserLocationStatus?
+  received      ReceivedAnnouncement[]
+}
+
+model UserProfile {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  key       String
+  value     String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, key])
 }
 
 model Location {
@@ -42,11 +56,14 @@ model Announcement {
   content      String
   visibility   Visibility   @default(PUBLIC)
   deliveryMode DeliveryMode @default(CENTRALIZED)
+  policyType   PolicyType   @default(WHITELIST)
+  policyRestrictions Json?  // Array de pares chave-valor, ex.: [{ "key": "Profissao", "value": "Estudante" }]
   startsAt     DateTime?
   endsAt       DateTime?
   createdAt    DateTime     @default(now())
   reactions    Reaction[]
   bookmarks    Bookmark[]
+  receivedBy   ReceivedAnnouncement[]
 }
 
 model Reaction {
@@ -72,6 +89,26 @@ model Bookmark {
   @@unique([announcementId, userId])
 }
 
+model UserLocationStatus {
+  userId      String   @id
+  user        User     @relation(fields: [userId], references: [id])
+  latitude    Float?
+  longitude   Float?
+  wifiIds     String[]
+  updatedAt   DateTime @default(now())
+}
+
+model ReceivedAnnouncement {
+  id             String       @id @default(uuid())
+  userId         String
+  user           User         @relation(fields: [userId], references: [id])
+  announcementId String
+  announcement   Announcement @relation(fields: [announcementId], references: [id])
+  receivedAt     DateTime     @default(now())
+
+  @@unique([userId, announcementId])
+}
+
 enum Visibility {
   PUBLIC
   PRIVATE
@@ -82,6 +119,10 @@ enum DeliveryMode {
   DECENTRALIZED
 }
 
+enum PolicyType {
+  WHITELIST
+  BLACKLIST
+}
 enum ReactionType {
   LIKE
 }

@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -11,11 +11,28 @@ import {
   Alert,
 } from 'react-native';
 import { useAuth } from './context/AuthContext';
+import { fetchProfileAttributes } from './lib/api';
 
 const ProfileScreen = () => {
   const router = useRouter();
-  const { user, logout } = useAuth();
+  const { user, token, logout } = useAuth();
   const [activeTab, setActiveTab] = useState('profile');
+  const [attributes, setAttributes] = useState<{ key: string; value: string }[]>([]);
+  const [loadingAttrs, setLoadingAttrs] = useState(false);
+
+  useEffect(() => {
+    const load = async () => {
+      if (!token) return;
+      try {
+        setLoadingAttrs(true);
+        const res = await fetchProfileAttributes(token);
+        setAttributes(res.attributes.map(a => ({ key: a.key, value: a.value })));
+      } finally {
+        setLoadingAttrs(false);
+      }
+    };
+    load();
+  }, [token]);
 
   const handleNavigation = (tab: string) => {
     setActiveTab(tab);
@@ -60,10 +77,6 @@ const ProfileScreen = () => {
   const profileData = {
     username: user?.username ?? 'Utilizador',
     email: user?.email ?? 'sem-email',
-    occupation: 'Estudante',
-    club: 'Real Madrid',
-    age: '25',
-    city: 'Luanda',
   };
 
   return (
@@ -112,50 +125,23 @@ const ProfileScreen = () => {
         {/* Profile Attributes Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Atributos do Perfil</Text>
-          
-          <TouchableOpacity style={styles.infoCard}>
-            <View style={styles.iconContainer}>
-              <Text style={styles.iconText}>💼</Text>
-            </View>
-            <View style={styles.infoContent}>
-              <Text style={styles.infoLabel}>Profissão</Text>
-              <Text style={styles.infoValue}>{profileData.occupation}</Text>
-            </View>
-            <Text style={styles.chevron}>›</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.infoCard}>
-            <View style={styles.iconContainer}>
-              <Text style={styles.iconText}>⚽</Text>
-            </View>
-            <View style={styles.infoContent}>
-              <Text style={styles.infoLabel}>Clube</Text>
-              <Text style={styles.infoValue}>{profileData.club}</Text>
-            </View>
-            <Text style={styles.chevron}>›</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.infoCard}>
-            <View style={styles.iconContainer}>
-              <Text style={styles.iconText}>🎂</Text>
-            </View>
-            <View style={styles.infoContent}>
-              <Text style={styles.infoLabel}>Idade</Text>
-              <Text style={styles.infoValue}>{profileData.age}</Text>
-            </View>
-            <Text style={styles.chevron}>›</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.infoCard}>
-            <View style={styles.iconContainer}>
-              <Text style={styles.iconText}>🏙️</Text>
-            </View>
-            <View style={styles.infoContent}>
-              <Text style={styles.infoLabel}>Cidade</Text>
-              <Text style={styles.infoValue}>{profileData.city}</Text>
-            </View>
-            <Text style={styles.chevron}>›</Text>
-          </TouchableOpacity>
+          {loadingAttrs ? (
+            <Text style={{ color: '#6B7280' }}>A carregar...</Text>
+          ) : attributes.length === 0 ? (
+            <Text style={{ color: '#6B7280' }}>Sem atributos. Edite o perfil para adicionar.</Text>
+          ) : (
+            attributes.map(attr => (
+              <View key={attr.key} style={styles.infoCard}>
+                <View style={styles.iconContainer}>
+                  <Text style={styles.iconText}>🏷️</Text>
+                </View>
+                <View style={styles.infoContent}>
+                  <Text style={styles.infoLabel}>{attr.key}</Text>
+                  <Text style={styles.infoValue}>{attr.value}</Text>
+                </View>
+              </View>
+            ))
+          )}
         </View>
 
         {/* Actions Section */}

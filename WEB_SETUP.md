@@ -105,3 +105,4 @@ O backend não está rodando ou não está acessível em `localhost:4000`.
 
 **Dica:** Se você está desenvolvendo e testando em múltiplas plataformas, mantenha o backend rodando sempre que possível.
 
+

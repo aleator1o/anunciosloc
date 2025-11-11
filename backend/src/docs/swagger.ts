@@ -18,6 +18,25 @@ export const swaggerSpec = swaggerJsdoc({
         },
       },
       schemas: {
+        ProfileAttributeCreate: {
+          type: "object",
+          required: ["key", "value"],
+          properties: {
+            key: { type: "string" },
+            value: { type: "string" },
+          },
+        },
+        PresenceUpdate: {
+          type: "object",
+          properties: {
+            latitude: { type: "number" },
+            longitude: { type: "number" },
+            wifiIds: {
+              type: "array",
+              items: { type: "string" },
+            },
+          },
+        },
         LocationCreate: {
           type: "object",
           required: ["name"],
@@ -49,6 +68,22 @@ export const swaggerSpec = swaggerJsdoc({
             deliveryMode: {
               type: "string",
               enum: ["CENTRALIZED", "DECENTRALIZED"],
+            },
+            policyType: {
+              type: "string",
+              enum: ["WHITELIST", "BLACKLIST"],
+              default: "WHITELIST",
+            },
+            policyRestrictions: {
+              type: "array",
+              items: {
+                type: "object",
+                required: ["key", "value"],
+                properties: {
+                  key: { type: "string" },
+                  value: { type: "string" },
+                },
+              },
             },
             startsAt: { type: "string", format: "date-time" },
             endsAt: { type: "string", format: "date-time" },

@@ -191,3 +191,4 @@ Antes de testar, certifique-se de que:
 
 **Comando para iniciar:** `npm start` (usa `--lan` automaticamente)
 
+
