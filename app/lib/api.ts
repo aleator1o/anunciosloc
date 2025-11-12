@@ -39,8 +39,20 @@ const getBaseUrl = () => {
 
 const DEFAULT_BASE_URL = getBaseUrl();
 
-// Log da URL base para debug
-console.log(`[API] URL base configurada: ${DEFAULT_BASE_URL} (Platform: ${Platform.OS})`);
+// Log da URL base para debug com informações detalhadas
+const hasEnvUrl = !!process.env.EXPO_PUBLIC_API_URL;
+console.log(`[API] ========================================`);
+console.log(`[API] URL base configurada: ${DEFAULT_BASE_URL}`);
+console.log(`[API] Platform: ${Platform.OS}`);
+console.log(`[API] EXPO_PUBLIC_API_URL configurado: ${hasEnvUrl ? '✅ SIM' : '❌ NÃO'}`);
+if (!hasEnvUrl && Platform.OS === "android") {
+  console.log(`[API] ⚠️  ATENÇÃO: Usando IP de emulador (10.0.2.2)`);
+  console.log(`[API] ⚠️  Se estiver usando dispositivo físico ou Expo Go:`);
+  console.log(`[API] ⚠️  1. Crie arquivo .env na raiz do projeto`);
+  console.log(`[API] ⚠️  2. Adicione: EXPO_PUBLIC_API_URL=http://192.168.100.13:4000/api`);
+  console.log(`[API] ⚠️  3. Reinicie o Expo`);
+}
+console.log(`[API] ========================================`);
 
 export type HttpMethod = "GET" | "POST" | "PUT" | "DELETE";
 
@@ -51,8 +63,8 @@ interface RequestOptions<T> {
   timeout?: number;
 }
 
-// Timeout padrão de 15 segundos
-const DEFAULT_TIMEOUT = 15000;
+// Timeout padrão de 30 segundos (aumentado para conexões mais lentas)
+const DEFAULT_TIMEOUT = 30000;
 
 class ApiClient {
   constructor(private readonly baseUrl: string) {}
@@ -106,18 +118,54 @@ class ApiClient {
     } catch (error: any) {
       if (error.name === "AbortError") {
         console.error("[API] Timeout na requisição");
-        throw new Error("Tempo de espera esgotado. Verifique sua conexão com o servidor.");
+        const currentUrl = url;
+        const isEmulator = currentUrl.includes("10.0.2.2");
+        const isPhysicalDevice = !isEmulator && Platform.OS === "android";
+        
+        let errorMsg = "Tempo de espera esgotado ao conectar ao servidor.\n\n";
+        errorMsg += `URL tentada: ${currentUrl}\n\n`;
+        
+        if (isPhysicalDevice || !process.env.EXPO_PUBLIC_API_URL) {
+          errorMsg += "⚠️ Dispositivo físico detectado!\n\n";
+          errorMsg += "Para dispositivos físicos, você precisa:\n";
+          errorMsg += "1. Criar arquivo .env na raiz do projeto\n";
+          errorMsg += "2. Adicionar: EXPO_PUBLIC_API_URL=http://192.168.100.13:4000/api\n";
+          errorMsg += "3. Reiniciar o Expo (Ctrl+C e depois 'npm start')\n\n";
+          errorMsg += "Seu IP atual: 192.168.100.13\n";
+        } else {
+          errorMsg += "Verifique:\n";
+          errorMsg += "1. Se o backend está rodando (npm run dev no diretório backend)\n";
+          errorMsg += "2. Se está na mesma rede WiFi\n";
+          errorMsg += "3. Se o firewall não está bloqueando a porta 4000\n";
+        }
+        
+        throw new Error(errorMsg);
       }
 
       if (error.message.includes("Network request failed") || error.message.includes("Failed to fetch")) {
         console.error("[API] Erro de rede:", error);
-        throw new Error(
-          `Não foi possível conectar ao servidor. Verifique:\n` +
-          `1. Se o backend está rodando na porta 4000\n` +
-          `2. Se está usando o IP correto (dispositivo físico precisa do IP da máquina)\n` +
-          `3. Se o dispositivo e o computador estão na mesma rede WiFi\n` +
-          `4. Configure EXPO_PUBLIC_API_URL no arquivo .env com o IP correto`
-        );
+        const currentUrl = url;
+        const isEmulator = currentUrl.includes("10.0.2.2");
+        const isPhysicalDevice = !isEmulator && Platform.OS === "android";
+        
+        let errorMsg = "Não foi possível conectar ao servidor.\n\n";
+        errorMsg += `URL tentada: ${currentUrl}\n\n`;
+        
+        if (isPhysicalDevice || !process.env.EXPO_PUBLIC_API_URL) {
+          errorMsg += "⚠️ Dispositivo físico detectado!\n\n";
+          errorMsg += "Para dispositivos físicos, você precisa:\n";
+          errorMsg += "1. Criar arquivo .env na raiz do projeto\n";
+          errorMsg += "2. Adicionar: EXPO_PUBLIC_API_URL=http://192.168.100.13:4000/api\n";
+          errorMsg += "3. Reiniciar o Expo (Ctrl+C e depois 'npm start')\n\n";
+          errorMsg += "Seu IP atual: 192.168.100.13\n";
+        } else {
+          errorMsg += "Verifique:\n";
+          errorMsg += "1. Se o backend está rodando na porta 4000\n";
+          errorMsg += "2. Se está usando o IP correto\n";
+          errorMsg += "3. Se o dispositivo e o computador estão na mesma rede WiFi\n";
+        }
+        
+        throw new Error(errorMsg);
       }
 
       console.error("[API] Erro:", error);
@@ -167,5 +215,25 @@ export async function deleteProfileAttribute(token: string, key: string) {
 
 export async function fetchPublicProfileKeys() {
   return api.get<{ keys: string[] }>("/profile/keys");
+}
+
+// --------- Presença e Localização ---------
+export interface LocationUpdate {
+  latitude?: number;
+  longitude?: number;
+  wifiIds?: string[];
+}
+
+export async function updateUserLocation(token: string, location: LocationUpdate) {
+  return api.post<{ status: string }, LocationUpdate>("/presence/location", location, token);
+}
+
+// --------- Anúncios Disponíveis e Recebidos ---------
+export async function fetchAvailableAnnouncements(token: string) {
+  return api.get<{ announcements: any[] }>("/announcements/available", token);
+}
+
+export async function receiveAnnouncement(token: string, announcementId: string) {
+  return api.post<{ received: any }, void>(`/announcements/${announcementId}/receive`, undefined, token);
 }
 

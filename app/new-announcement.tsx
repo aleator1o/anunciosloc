@@ -34,15 +34,40 @@ const NewAnnouncementScreen = () => {
   }, []);
   const [message, setMessage] = useState('');
   const [deliveryMode, setDeliveryMode] = useState<'CENTRALIZED' | 'DECENTRALIZED'>('CENTRALIZED');
-  const [visibility, setVisibility] = useState<'PUBLIC' | 'PRIVATE'>('PUBLIC');
   const [publishNow, setPublishNow] = useState(true);
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [selectedLocation, setSelectedLocation] = useState('');
+  const [selectedLocationName, setSelectedLocationName] = useState('');
+  const [locations, setLocations] = useState<Array<{ id: string; name: string }>>([]);
+  const [loadingLocations, setLoadingLocations] = useState(false);
+  const [showLocationPicker, setShowLocationPicker] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    const loadLocations = async () => {
+      if (!token) return;
+      try {
+        setLoadingLocations(true);
+        const res = await api.get<{ locations: Array<{ id: string; name: string }> }>('/locations', token);
+        setLocations(res.locations || []);
+      } catch (err) {
+        console.error('Erro ao carregar locais:', err);
+      } finally {
+        setLoadingLocations(false);
+      }
+    };
+    loadLocations();
+  }, [token]);
 
   const handleGoBack = () => {
     router.back();
+  };
+
+  const handleSelectLocation = (locationId: string, locationName: string) => {
+    setSelectedLocation(locationId);
+    setSelectedLocationName(locationName);
+    setShowLocationPicker(false);
   };
 
   const handlePublish = async () => {
@@ -63,10 +88,10 @@ const NewAnnouncementScreen = () => {
         {
           content: message,
           deliveryMode,
-          visibility,
+          visibility: 'PUBLIC', // Sempre público - a política de destinatários controla quem vê
           policyType,
           policyRestrictions: restrictions.filter(r => r.key.trim() && r.value.trim()),
-          locationId: selectedLocation || undefined,
+          locationId: selectedLocation.trim() || undefined,
           startsAt: publishNow || !startDate ? undefined : new Date(startDate).toISOString(),
           endsAt: publishNow || !endDate ? undefined : new Date(endDate).toISOString(),
         },
@@ -123,39 +148,54 @@ const NewAnnouncementScreen = () => {
 
         {/* Policy Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Política de Destinatários</Text>
+          <Text style={styles.sectionTitle}>Quem pode ver este anúncio?</Text>
+          <Text style={styles.label}>Política de Destinatários</Text>
           
-          <TouchableOpacity 
-            style={[styles.radioOption, policyType === 'WHITELIST' && styles.radioOptionSelected]}
-            onPress={() => setPolicyType('WHITELIST')}
-          >
-            <View style={styles.radioContent}>
-              <Text style={styles.radioIcon}>✅</Text>
-              <View style={styles.radioTextContainer}>
-                <Text style={styles.radioTitle}>Whitelist</Text>
-                <Text style={styles.radioDescription}>Apenas quem corresponde às restrições recebe</Text>
+          <View style={styles.visibilityList}>
+            <TouchableOpacity 
+              style={[styles.visibilityOption, policyType === 'WHITELIST' && styles.visibilityOptionSelected]}
+              onPress={() => setPolicyType('WHITELIST')}
+            >
+              <View style={styles.visibilityContent}>
+                <Text style={styles.visibilityIcon}>✅</Text>
+                <View style={styles.visibilityTextContainer}>
+                  <Text style={styles.visibilityTitle}>Whitelist (Lista Branca)</Text>
+                  <Text style={styles.visibilityDescription}>
+                    Apenas utilizadores que correspondem às restrições de perfil podem ver este anúncio
+                  </Text>
+                </View>
               </View>
-            </View>
-            <View style={[styles.radioCircle, policyType === 'WHITELIST' && styles.radioCircleSelected]}>
-              {policyType === 'WHITELIST' && <View style={styles.radioInner} />}
-            </View>
-          </TouchableOpacity>
+              <View style={[styles.radioCircle, policyType === 'WHITELIST' && styles.radioCircleSelected]}>
+                {policyType === 'WHITELIST' && <View style={styles.radioInner} />}
+              </View>
+            </TouchableOpacity>
 
-          <TouchableOpacity 
-            style={[styles.radioOption, policyType === 'BLACKLIST' && styles.radioOptionSelected]}
-            onPress={() => setPolicyType('BLACKLIST')}
-          >
-            <View style={styles.radioContent}>
-              <Text style={styles.radioIcon}>⛔</Text>
-              <View style={styles.radioTextContainer}>
-                <Text style={styles.radioTitle}>Blacklist</Text>
-                <Text style={styles.radioDescription}>Todos recebem, exceto quem corresponde às restrições</Text>
+            <TouchableOpacity 
+              style={[styles.visibilityOption, policyType === 'BLACKLIST' && styles.visibilityOptionSelected]}
+              onPress={() => setPolicyType('BLACKLIST')}
+            >
+              <View style={styles.visibilityContent}>
+                <Text style={styles.visibilityIcon}>⛔</Text>
+                <View style={styles.visibilityTextContainer}>
+                  <Text style={styles.visibilityTitle}>Blacklist (Lista Negra)</Text>
+                  <Text style={styles.visibilityDescription}>
+                    Todos os utilizadores podem ver, exceto os que correspondem às restrições de perfil
+                  </Text>
+                </View>
               </View>
+              <View style={[styles.radioCircle, policyType === 'BLACKLIST' && styles.radioCircleSelected]}>
+                {policyType === 'BLACKLIST' && <View style={styles.radioInner} />}
+              </View>
+            </TouchableOpacity>
+          </View>
+
+          {restrictions.length === 0 && (
+            <View style={styles.visibilityInfo}>
+              <Text style={styles.visibilityInfoText}>
+                ℹ️ Se não adicionar restrições, o anúncio será visível para todos os utilizadores (independente da política escolhida).
+              </Text>
             </View>
-            <View style={[styles.radioCircle, policyType === 'BLACKLIST' && styles.radioCircleSelected]}>
-              {policyType === 'BLACKLIST' && <View style={styles.radioInner} />}
-            </View>
-          </TouchableOpacity>
+          )}
 
           <Text style={[styles.label, { marginTop: 8 }]}>Restrições (pares chave-valor)</Text>
           {restrictions.map((r, idx) => (
@@ -211,37 +251,63 @@ const NewAnnouncementScreen = () => {
         {/* Location Section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Localização</Text>
-          <Text style={styles.label}>Local de Destino</Text>
-          <TextInput
-            style={styles.dropdown}
-            placeholder="ID do local (opcional)"
-            placeholderTextColor="#9CA3AF"
-            value={selectedLocation}
-            onChangeText={setSelectedLocation}
-            autoCapitalize="none"
-          />
+          <Text style={styles.label}>Local de Destino (opcional)</Text>
+          
+          {selectedLocation ? (
+            <View style={styles.selectedLocationContainer}>
+              <Text style={styles.selectedLocationText}>{selectedLocationName}</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setSelectedLocation('');
+                  setSelectedLocationName('');
+                }}
+                style={styles.removeLocationButton}
+              >
+                <Text style={styles.removeLocationText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={styles.dropdown}
+              onPress={() => setShowLocationPicker(!showLocationPicker)}
+            >
+              <Text style={[styles.dropdownText, !selectedLocation && { color: '#9CA3AF' }]}>
+                {loadingLocations ? 'Carregando locais...' : 'Selecionar local'}
+              </Text>
+              <Text style={styles.dropdownIcon}>▼</Text>
+            </TouchableOpacity>
+          )}
+
+          {showLocationPicker && !selectedLocation && (
+            <View style={styles.locationPicker}>
+              {locations.length === 0 ? (
+                <Text style={styles.emptyText}>Nenhum local disponível</Text>
+              ) : (
+                locations.map((loc) => (
+                  <TouchableOpacity
+                    key={loc.id}
+                    style={styles.locationOption}
+                    onPress={() => handleSelectLocation(loc.id, loc.name)}
+                  >
+                    <Text style={styles.locationOptionText}>{loc.name}</Text>
+                  </TouchableOpacity>
+                ))
+              )}
+              <TouchableOpacity
+                style={styles.locationOption}
+                onPress={() => {
+                  setShowLocationPicker(false);
+                  router.push('/create-location');
+                }}
+              >
+                <Text style={[styles.locationOptionText, { color: '#06B6D4', fontWeight: '600' }]}>
+                  + Criar novo local
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
         </View>
 
-        {/* Visibility Section */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Políticas de Visibilidade</Text>
-          <Text style={styles.label}>Quem pode ver este anúncio?</Text>
-          
-          <TouchableOpacity 
-            style={[styles.radioOption, visibility === 'PUBLIC' && styles.radioOptionSelected]}
-            onPress={() => setVisibility('PUBLIC')}
-          >
-            <View style={styles.radioContent}>
-              <Text style={styles.radioIcon}>🌍</Text>
-              <View style={styles.radioTextContainer}>
-                <Text style={styles.radioTitle}>Público (todos podem ver)</Text>
-              </View>
-            </View>
-            <View style={[styles.radioCircle, visibility === 'PUBLIC' && styles.radioCircleSelected]}>
-              {visibility === 'PUBLIC' && <View style={styles.radioInner} />}
-            </View>
-          </TouchableOpacity>
-        </View>
 
         {/* Delivery Mode Section */}
         <View style={styles.section}>
@@ -424,11 +490,117 @@ const styles = StyleSheet.create({
   },
   dropdownText: {
     fontSize: 15,
-    color: '#6B7280',
+    color: '#1F2937',
   },
   dropdownIcon: {
-    fontSize: 24,
+    fontSize: 16,
     color: '#9CA3AF',
+  },
+  selectedLocationContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#ECFEFF',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 2,
+    borderColor: '#06B6D4',
+  },
+  selectedLocationText: {
+    fontSize: 15,
+    color: '#1F2937',
+    fontWeight: '500',
+    flex: 1,
+  },
+  removeLocationButton: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#FEE2E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginLeft: 12,
+  },
+  removeLocationText: {
+    fontSize: 16,
+    color: '#DC2626',
+    fontWeight: '600',
+  },
+  locationPicker: {
+    marginTop: 8,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    maxHeight: 200,
+  },
+  locationOption: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  locationOptionText: {
+    fontSize: 15,
+    color: '#1F2937',
+  },
+  emptyText: {
+    padding: 16,
+    fontSize: 14,
+    color: '#9CA3AF',
+    textAlign: 'center',
+  },
+  visibilityList: {
+    gap: 12,
+  },
+  visibilityOption: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+  },
+  visibilityOptionSelected: {
+    borderColor: '#06B6D4',
+    backgroundColor: '#ECFEFF',
+  },
+  visibilityContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  visibilityIcon: {
+    fontSize: 28,
+    marginRight: 12,
+  },
+  visibilityTextContainer: {
+    flex: 1,
+  },
+  visibilityTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 4,
+  },
+  visibilityDescription: {
+    fontSize: 13,
+    color: '#6B7280',
+    lineHeight: 18,
+  },
+  visibilityInfo: {
+    marginTop: 12,
+    padding: 12,
+    backgroundColor: '#FEF3C7',
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#F59E0B',
+  },
+  visibilityInfoText: {
+    fontSize: 13,
+    color: '#92400E',
+    lineHeight: 18,
   },
   radioOption: {
     flexDirection: 'row',

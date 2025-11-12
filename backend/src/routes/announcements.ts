@@ -123,6 +123,8 @@ router.get("/available", requireAuth, async (req: AuthenticatedRequest, res) => 
     include: {
       author: { select: { id: true, username: true } },
       location: true,
+      reactions: true,
+      bookmarks: true,
     },
     orderBy: { createdAt: "desc" },
   });
@@ -291,11 +293,21 @@ router.post("/", requireAuth, async (req: AuthenticatedRequest, res) => {
 
   const { content, locationId, visibility, deliveryMode, policyType, policyRestrictions, startsAt, endsAt } = parseResult.data;
 
+  // Validar locationId se fornecido
+  if (locationId) {
+    const location = await prisma.location.findUnique({
+      where: { id: locationId },
+    });
+    if (!location) {
+      return res.status(404).json({ message: "Local não encontrado" });
+    }
+  }
+
   const announcement = await prisma.announcement.create({
     data: {
       authorId: req.userId!,
       content,
-      locationId,
+      locationId: locationId || undefined,
       visibility,
       deliveryMode,
       policyType,

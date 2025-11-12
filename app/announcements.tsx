@@ -12,15 +12,18 @@ import {
   Alert,
 } from 'react-native';
 import { useAuth } from './context/AuthContext';
-import { api } from './lib/api';
+import { api, fetchAvailableAnnouncements, receiveAnnouncement } from './lib/api';
 import { Announcement } from '../types/api';
+import { locationService, getCurrentGPSLocation, getCurrentWiFiIds } from './lib/locationService';
 
 const AnnouncementsScreen = () => {
   const router = useRouter();
   const { token, user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'all' | 'nearby' | 'recent'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'available' | 'recent'>('all');
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [availableAnnouncements, setAvailableAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadingAvailable, setLoadingAvailable] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const handleNavigation = (tab: string) => {
@@ -37,6 +40,7 @@ const AnnouncementsScreen = () => {
     router.push('/new-announcement');
   };
 
+  // Carregar anúncios gerais
   useEffect(() => {
     if (!token) {
       router.replace('/login');
@@ -59,20 +63,78 @@ const AnnouncementsScreen = () => {
     fetchAnnouncements();
   }, [token, router]);
 
+  // Inicializar serviço de localização e carregar anúncios disponíveis
+  useEffect(() => {
+    if (!token) return;
+
+    const initializeLocation = async () => {
+      try {
+        // Tentar obter GPS
+        const gpsLocation = await getCurrentGPSLocation();
+        const wifiIds = await getCurrentWiFiIds();
+
+        // Se tiver GPS, iniciar serviço de localização
+        if (gpsLocation) {
+          locationService.start(token, {
+            latitude: gpsLocation.latitude,
+            longitude: gpsLocation.longitude,
+            wifiIds: wifiIds.length > 0 ? wifiIds : undefined,
+          });
+        } else {
+          // Sem GPS, ainda podemos usar WiFi IDs se disponíveis
+          if (wifiIds.length > 0) {
+            locationService.start(token, { wifiIds });
+          }
+        }
+      } catch (error) {
+        console.warn('[Announcements] Erro ao inicializar localização:', error);
+      }
+    };
+
+    initializeLocation();
+
+    // Carregar anúncios disponíveis
+    const loadAvailable = async () => {
+      try {
+        setLoadingAvailable(true);
+        const response = await fetchAvailableAnnouncements(token);
+        setAvailableAnnouncements(response.announcements || []);
+      } catch (err) {
+        console.error('[Announcements] Erro ao carregar disponíveis:', err);
+      } finally {
+        setLoadingAvailable(false);
+      }
+    };
+
+    loadAvailable();
+
+    // Atualizar anúncios disponíveis periodicamente (a cada 30s)
+    const interval = setInterval(loadAvailable, 30000);
+
+    return () => {
+      locationService.stop();
+      clearInterval(interval);
+    };
+  }, [token]);
+
   const filteredAnnouncements = useMemo(() => {
+    if (activeTab === 'available') {
+      return availableAnnouncements;
+    }
     if (activeTab === 'recent') {
       return [...announcements].sort(
         (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
       );
     }
-    // Para 'nearby' e 'all', por agora devolvemos a lista completa.
+    // Para 'all', devolvemos a lista completa
     return announcements;
-  }, [announcements, activeTab]);
+  }, [announcements, availableAnnouncements, activeTab]);
 
   const toggleLike = async (announcement: Announcement) => {
     if (!token) return;
 
-    const isLiked = announcement.reactions.some((reaction) => reaction.userId === user?.id);
+    const reactions = announcement.reactions || [];
+    const isLiked = reactions.some((reaction) => reaction.userId === user?.id);
 
     try {
       if (isLiked) {
@@ -82,16 +144,17 @@ const AnnouncementsScreen = () => {
       }
 
       setAnnouncements((prev) =>
-        prev.map((item) =>
-          item.id === announcement.id
+        prev.map((item) => {
+          const itemReactions = item.reactions || [];
+          return item.id === announcement.id
             ? {
                 ...item,
                 reactions: isLiked
-                  ? item.reactions.filter((reaction) => reaction.userId !== user?.id)
-                  : [...item.reactions, { id: `${Date.now()}`, userId: user?.id ?? '', type: 'LIKE' }],
+                  ? itemReactions.filter((reaction) => reaction.userId !== user?.id)
+                  : [...itemReactions, { id: `${Date.now()}`, userId: user?.id ?? '', type: 'LIKE' }],
               }
-            : item,
-        ),
+            : item;
+        }),
       );
     } catch (err) {
       Alert.alert('Erro', (err as Error).message ?? 'Não foi possível atualizar o like');
@@ -101,7 +164,8 @@ const AnnouncementsScreen = () => {
   const toggleBookmark = async (announcement: Announcement) => {
     if (!token) return;
 
-    const isBookmarked = announcement.bookmarks.some((bookmark) => bookmark.userId === user?.id);
+    const bookmarks = announcement.bookmarks || [];
+    const isBookmarked = bookmarks.some((bookmark) => bookmark.userId === user?.id);
 
     try {
       if (isBookmarked) {
@@ -111,19 +175,40 @@ const AnnouncementsScreen = () => {
       }
 
       setAnnouncements((prev) =>
-        prev.map((item) =>
-          item.id === announcement.id
+        prev.map((item) => {
+          const itemBookmarks = item.bookmarks || [];
+          return item.id === announcement.id
             ? {
                 ...item,
                 bookmarks: isBookmarked
-                  ? item.bookmarks.filter((bookmark) => bookmark.userId !== user?.id)
-                  : [...item.bookmarks, { id: `${Date.now()}`, userId: user?.id ?? '' }],
+                  ? itemBookmarks.filter((bookmark) => bookmark.userId !== user?.id)
+                  : [...itemBookmarks, { id: `${Date.now()}`, userId: user?.id ?? '' }],
               }
-            : item,
-        ),
+            : item;
+        }),
       );
     } catch (err) {
       Alert.alert('Erro', (err as Error).message ?? 'Não foi possível atualizar o marcador');
+    }
+  };
+
+  const handleReceive = async (announcement: Announcement) => {
+    if (!token) return;
+
+    try {
+      await receiveAnnouncement(token, announcement.id);
+      Alert.alert('Sucesso', 'Mensagem recebida! Ela permanecerá disponível mesmo se você sair do local.');
+      
+      // Remover da lista de disponíveis e adicionar à lista geral
+      setAvailableAnnouncements((prev) => prev.filter((a) => a.id !== announcement.id));
+      setAnnouncements((prev) => {
+        if (prev.some((a) => a.id === announcement.id)) {
+          return prev;
+        }
+        return [announcement, ...prev];
+      });
+    } catch (err) {
+      Alert.alert('Erro', (err as Error).message ?? 'Não foi possível receber a mensagem');
     }
   };
 
@@ -132,8 +217,7 @@ const AnnouncementsScreen = () => {
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-        </TouchableOpacity>
+        <View style={styles.backButton} />
         <Text style={styles.headerTitle}>Anúncios</Text>
         <TouchableOpacity onPress={handleNewAnnouncement} style={styles.addButton}>
           <Text style={styles.addIcon}>+</Text>
@@ -151,11 +235,13 @@ const AnnouncementsScreen = () => {
         </TouchableOpacity>
 
         <TouchableOpacity 
-          style={[styles.tab, activeTab === 'nearby' && styles.tabActive]}
-          onPress={() => setActiveTab('nearby')}
+          style={[styles.tab, activeTab === 'available' && styles.tabActive]}
+          onPress={() => setActiveTab('available')}
         >
           <Text style={styles.tabIcon}>📍</Text>
-          <Text style={activeTab === 'nearby' ? styles.tabTextActive : styles.tabText}>Próximos</Text>
+          <Text style={activeTab === 'available' ? styles.tabTextActive : styles.tabText}>
+            Disponíveis {availableAnnouncements.length > 0 && `(${availableAnnouncements.length})`}
+          </Text>
         </TouchableOpacity>
 
         <TouchableOpacity 
@@ -169,22 +255,38 @@ const AnnouncementsScreen = () => {
 
       {/* Announcements List */}
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {loading && <ActivityIndicator color="#06B6D4" style={{ marginTop: 24 }} />}
+        {(loading || (activeTab === 'available' && loadingAvailable)) && (
+          <ActivityIndicator color="#06B6D4" style={{ marginTop: 24 }} />
+        )}
 
         {error && !loading && (
           <Text style={{ color: '#EF4444', marginHorizontal: 16, marginBottom: 12 }}>{error}</Text>
         )}
 
-        {!loading && !error && filteredAnnouncements.length === 0 && (
+        {activeTab === 'available' && !loadingAvailable && availableAnnouncements.length === 0 && (
+          <View style={{ marginHorizontal: 16, marginTop: 24, padding: 16, backgroundColor: '#F3F4F6', borderRadius: 12 }}>
+            <Text style={{ color: '#6B7280', textAlign: 'center', marginBottom: 8 }}>
+              📍 Nenhum anúncio disponível no seu local atual
+            </Text>
+            <Text style={{ color: '#9CA3AF', fontSize: 12, textAlign: 'center' }}>
+              Os anúncios aparecerão aqui quando você estiver em um local com mensagens publicadas
+            </Text>
+          </View>
+        )}
+
+        {!loading && !error && activeTab !== 'available' && filteredAnnouncements.length === 0 && (
           <Text style={{ color: '#6B7280', marginHorizontal: 16 }}>Ainda não há anúncios.</Text>
         )}
 
         {!loading &&
           !error &&
           filteredAnnouncements.map((announcement) => {
-            const isLiked = announcement.reactions.some((reaction) => reaction.userId === user?.id);
-            const isBookmarked = announcement.bookmarks.some((bookmark) => bookmark.userId === user?.id);
-            const avatar = announcement.author.username.charAt(0).toUpperCase();
+            // Garantir que reactions e bookmarks são arrays (podem ser undefined)
+            const reactions = announcement.reactions || [];
+            const bookmarks = announcement.bookmarks || [];
+            const isLiked = reactions.some((reaction) => reaction.userId === user?.id);
+            const isBookmarked = bookmarks.some((bookmark) => bookmark.userId === user?.id);
+            const avatar = announcement.author?.username?.charAt(0).toUpperCase() || '?';
 
             return (
               <View key={announcement.id} style={styles.announcementCard}>
@@ -196,17 +298,17 @@ const AnnouncementsScreen = () => {
                     </View>
                     <View style={styles.authorDetails}>
                       <View style={styles.authorNameRow}>
-                        <Text style={styles.authorName}>{announcement.author.username}</Text>
+                        <Text style={styles.authorName}>{announcement.author?.username || 'Anônimo'}</Text>
                       </View>
                       <Text style={styles.timeText}>
-                        {new Date(announcement.createdAt).toLocaleString()}
+                        {announcement.createdAt ? new Date(announcement.createdAt).toLocaleString() : ''}
                       </Text>
                     </View>
                   </View>
                   {announcement.location && (
                     <View style={styles.locationBadge}>
                       <Text style={styles.locationIcon}>📍</Text>
-                      <Text style={styles.locationText}>{announcement.location.name}</Text>
+                      <Text style={styles.locationText}>{announcement.location?.name || 'Local desconhecido'}</Text>
                     </View>
                   )}
                 </View>
@@ -222,7 +324,7 @@ const AnnouncementsScreen = () => {
                       onPress={() => toggleLike(announcement)}
                     >
                       <Text style={styles.actionIcon}>{isLiked ? '❤️' : '🤍'}</Text>
-                      <Text style={styles.actionText}>{announcement.reactions.length}</Text>
+                      <Text style={styles.actionText}>{reactions.length}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={styles.actionButton}>
                       <Text style={styles.actionIcon}>💬</Text>
@@ -236,9 +338,19 @@ const AnnouncementsScreen = () => {
                       <Text style={styles.actionText}>{isBookmarked ? '1' : ''}</Text>
                     </TouchableOpacity>
                   </View>
-                  <TouchableOpacity onPress={() => router.push(`/announcement/${announcement.id}`)}>
-                    <Text style={styles.seeMoreText}>Ver mais</Text>
-                  </TouchableOpacity>
+                  <View style={styles.footerRight}>
+                    {activeTab === 'available' && (
+                      <TouchableOpacity
+                        style={styles.receiveButton}
+                        onPress={() => handleReceive(announcement)}
+                      >
+                        <Text style={styles.receiveButtonText}>✓ Receber</Text>
+                      </TouchableOpacity>
+                    )}
+                    <TouchableOpacity onPress={() => router.push(`/announcement/${announcement.id}`)}>
+                      <Text style={styles.seeMoreText}>Ver mais</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </View>
             );
@@ -246,6 +358,15 @@ const AnnouncementsScreen = () => {
 
         <View style={{ height: 100 }} />
       </ScrollView>
+
+      {/* Floating Action Button (FAB) */}
+      <TouchableOpacity 
+        style={styles.fab}
+        onPress={handleNewAnnouncement}
+        activeOpacity={0.8}
+      >
+        <Text style={styles.fabIcon}>+</Text>
+      </TouchableOpacity>
 
       {/* Bottom Navigation */}
       <View style={styles.bottomNav}>
@@ -330,11 +451,37 @@ const styles = StyleSheet.create({
     height: 40,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: '#06B6D4',
+    borderRadius: 20,
   },
   addIcon: {
+    fontSize: 28,
+    color: '#FFFFFF',
+    fontWeight: '600',
+    lineHeight: 28,
+  },
+  fab: {
+    position: 'absolute',
+    right: 20,
+    bottom: 100,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#06B6D4',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 8,
+    zIndex: 1000,
+  },
+  fabIcon: {
     fontSize: 32,
-    color: '#06B6D4',
+    color: '#FFFFFF',
     fontWeight: '300',
+    lineHeight: 32,
   },
   tabsContainer: {
     flexDirection: 'row',
@@ -476,6 +623,22 @@ const styles = StyleSheet.create({
   footerLeft: {
     flexDirection: 'row',
     gap: 16,
+  },
+  footerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  receiveButton: {
+    backgroundColor: '#10B981',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 8,
+  },
+  receiveButtonText: {
+    color: '#FFFFFF',
+    fontSize: 13,
+    fontWeight: '600',
   },
   actionButton: {
     flexDirection: 'row',

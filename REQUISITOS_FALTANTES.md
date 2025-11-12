@@ -331,124 +331,33 @@
 
 
 
-o que falta implementar 
+Como funciona
+Ao abrir a tela de anúncios:
+Tenta obter GPS (se expo-location estiver instalado)
+Inicia o serviço de localização (envia a cada 30s)
+Carrega anúncios disponíveis no local atual
+Na aba "Disponíveis":
+Mostra apenas anúncios que correspondem ao local atual
+Filtra por políticas (Whitelist/Blacklist) e perfil do utilizador
+Botão "Receber" marca a mensagem como recebida
+Após receber:
+Mensagem permanece disponível mesmo ao sair do local
+É removida da lista "Disponíveis" e pode aparecer em "Todos"
 
-Próximos passos
-Sugestão de ordem:
-1-Sistema de perfis (F6) — base para políticas
-2-Políticas whitelist/blacklist — requisito básico
-3-Sistema de recebimento — core da funcionalidade
-4-Detecção de localização — necessário para notificações
-5-Modo descentralizado — funcionalidade avançada
-6-Funcionalidades avançadas — mulas e segurança
-
-ja implementei o 1 
-o 2 falta coisas 
-
-
-Conectei o F6 (perfis) fim a fim.
-O que foi implementado:
-Backend
-Modelo UserProfile no Prisma.
-Endpoints protegidos:
-GET /api/profile/attributes
-POST /api/profile/attributes (upsert)
-DELETE /api/profile/attributes/:key
-GET /api/profile/keys
-Rotas ligadas e Swagger atualizado.
-Frontend
-app/lib/api.ts: funções para listar/criar/remover atributos e listar chaves públicas.
-app/edit-profile.tsx: ecrã para:
-Listar atributos atuais
-Adicionar/atualizar par chave-valor
-Remover par
-Sugestões de chaves com base em /profile/keys
-app/profile.tsx: mostra atributos reais do backend (sem valores fixos).
-Como testar
-Abrir app, fazer login.
-Ir a Editar Perfil:
-Adicionar: Profissao=Estudante; Clube=Real Madrid; Cidade=Luanda.
-Remover algum e confirmar atualização.
-Ir a Perfil:
-Ver os atributos listados dinamicamente.
-Via API (opcional):
-GET http://localhost:4000/api/profile/attributes (Bearer token)
-POST http://localhost:4000/api/profile/attributes body {"key":"Profissao","value":"Estudante"}
-Próximo passo sugerido
-Políticas de mensagens (Whitelist/Blacklist), que dependem destes atributos.
-Alterar Announcement para incluir: policyType e policyRestrictions (JSON).
-Backend: filtrar mensagens por política.
-Frontend: UI para escolher whitelist/blacklist e adicionar pares.
+Como testar:
+Inicie o app e vá para a tela de Anúncios
+O app solicitará permissão de localização (se ainda não tiver concedido)
+A localização GPS será enviada automaticamente ao servidor a cada 30 segundos
+Na aba "Disponíveis", você verá os anúncios do seu local atual
+Use o botão "✓ Receber" para marcar mensagens como recebidas
 
 
-Concluí a implementação das políticas de mensagens (Whitelist/Blacklist).
-O que foi feito
-Base de dados (Prisma)
-Announcement passou a ter policyType (WHITELIST | BLACKLIST) e policyRestrictions (JSON de pares chave-valor).
-Migração aplicada com sucesso.
-Backend
-POST /api/announcements agora aceita:
-policyType: "WHITELIST" | "BLACKLIST"
-policyRestrictions: [{ key, value }, ...]
-GET /api/announcements agora exige autenticação e:
-Filtra por janela de tempo (startsAt/endsAt)
-Compara as restrições da política com os atributos do perfil do utilizador autenticado (F6)
-Retorna apenas os anúncios compatíveis com as políticas
-Swagger atualizado (novos campos no AnnouncementCreate).
-Frontend
-new-announcement.tsx:
-UI para escolher Whitelist/Blacklist
-UI para adicionar/remover pares chave-valor de restrição
-Mostra chaves conhecidas (via /profile/keys)
-Envia policyType e policyRestrictions ao publicar
-Como testar
-Adicionar atributos ao perfil (ex.: Profissao=Estudante) em Editar Perfil.
-Criar um anúncio:
-Escolher Política: Whitelist
-Adicionar restrição: Profissao=Estudante
-Listar anúncios (Home/Anúncios):
-Deve aparecer para um utilizador com esse atributo
-Para outro utilizador sem o atributo, não deve aparecer
-Testar Blacklist invertendo a lógica.
-Próximo passo sugerido
-Sistema de “mensagens recebidas” e notificações:
-Modelo ReceivedAnnouncement
-POST /api/announcements/:id/receive
-GET /api/announcements/available baseado em localização e políticas
-Polling/WS e notificações no app
-
-Implementei o “recebimento de mensagens” no backend.
-O que foi adicionado
-Base de dados (Prisma)
-UserLocationStatus (estado atual: latitude, longitude, wifiIds, updatedAt)
-ReceivedAnnouncement (mensagens marcadas como recebidas por utilizador)
-Endpoints
-POST /api/presence/location (auth): atualiza localização GPS/WiFi atual
-GET /api/announcements/available (auth): retorna apenas os anúncios disponíveis no local atual do utilizador, aplicando:
-Janela de tempo (startsAt/endsAt)
-Geofencing (círculo com raio em metros)
-Matching de WiFi IDs
-Políticas (Whitelist/Blacklist) com atributos do perfil (F6)
-POST /api/announcements/:id/receive (auth): marca um anúncio como recebido (permanece disponível ao utilizador)
-Router e Swagger
-Rotas ligadas em routes/index.ts
-Swagger atualizado com schemas e documentação
-Como testar
-Atualizar localização:
-POST http://localhost:4000/api/presence/location
-Body: {"latitude": -8.8139, "longitude": 13.2319, "wifiIds": ["Hub WiFi Camama"]}
-Ver anúncios disponíveis no local:
-GET http://localhost:4000/api/announcements/available
-Marcar como recebido:
-POST http://localhost:4000/api/announcements/{id}/receive
-Próximo passo (frontend)
-Enviar periodicamente a localização:
-Ler GPS (Expo Location) e WiFi IDs (simulado ou manual)
-Chamar POST /presence/location
-Mostrar “Disponíveis perto de mim”:
-Consumir GET /announcements/available
-Botão “Receber” que chama POST /announcements/:id/receive
-
-faça isso, integrando esses pontos no frontend (envio da localização + lista de anúncios disponíveis + botão receber)
-
-e depois continua com outros pontos 
+Como funciona agora
+Uma única seção controla quem pode ver o anúncio:
+Se não adicionar restrições: todos podem ver (independente de Whitelist/Blacklist)
+Se adicionar restrições:
+Whitelist: apenas quem tem os atributos de perfil correspondentes vê
+Blacklist: todos veem, exceto quem tem os atributos correspondentes
+Exemplo:
+Whitelist + "Profissao=Estudante": apenas estudantes veem
+Blacklist + "Profissao=Estudante": todos veem, exceto estudantes
