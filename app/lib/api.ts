@@ -237,3 +237,16 @@ export async function receiveAnnouncement(token: string, announcementId: string)
   return api.post<{ received: any }, void>(`/announcements/${announcementId}/receive`, undefined, token);
 }
 
+// --------- Modo Descentralizado (P2P) ---------
+export async function fetchDecentralizedAnnouncements(token: string) {
+  return api.get<{ announcements: any[] }>("/announcements/decentralized", token);
+}
+
+export async function verifyAnnouncementLocation(token: string, announcementId: string) {
+  return api.post<{ isAtLocation: boolean; reason?: string }, void>(
+    `/announcements/${announcementId}/verify-location`,
+    undefined,
+    token
+  );
+}
+

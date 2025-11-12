@@ -12,16 +12,19 @@ import {
   Alert,
 } from 'react-native';
 import { useAuth } from './context/AuthContext';
-import { api, fetchAvailableAnnouncements, receiveAnnouncement } from './lib/api';
+import { api, fetchAvailableAnnouncements, receiveAnnouncement, fetchDecentralizedAnnouncements } from './lib/api';
 import { Announcement } from '../types/api';
 import { locationService, getCurrentGPSLocation, getCurrentWiFiIds } from './lib/locationService';
+import { notificationService } from './lib/notificationService';
+import { p2pService } from './lib/p2pService';
 
 const AnnouncementsScreen = () => {
   const router = useRouter();
   const { token, user } = useAuth();
-  const [activeTab, setActiveTab] = useState<'all' | 'available' | 'recent'>('all');
+  const [activeTab, setActiveTab] = useState<'all' | 'available' | 'recent' | 'p2p'>('all');
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
   const [availableAnnouncements, setAvailableAnnouncements] = useState<Announcement[]>([]);
+  const [p2pAnnouncements, setP2pAnnouncements] = useState<Announcement[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingAvailable, setLoadingAvailable] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,7 +66,7 @@ const AnnouncementsScreen = () => {
     fetchAnnouncements();
   }, [token, router]);
 
-  // Inicializar serviço de localização e carregar anúncios disponíveis
+  // Inicializar serviço de localização, notificações e carregar anúncios disponíveis
   useEffect(() => {
     if (!token) return;
 
@@ -93,12 +96,42 @@ const AnnouncementsScreen = () => {
 
     initializeLocation();
 
+    // Iniciar serviço de notificações
+    notificationService.start(token, 60000); // Verificar a cada 60 segundos
+
+    // Iniciar serviço P2P
+    if (user?.id) {
+      p2pService.start(token, user.id);
+      
+      // Carregar anúncios descentralizados do usuário
+      const loadDecentralized = async () => {
+        try {
+          const response = await fetchDecentralizedAnnouncements(token);
+          response.announcements.forEach((announcement: Announcement) => {
+            p2pService.addLocalAnnouncement(announcement);
+          });
+          
+          // Iniciar publicação se houver anúncios descentralizados
+          if (response.announcements.length > 0) {
+            p2pService.startPublishing();
+          }
+        } catch (err) {
+          console.error('[Announcements] Erro ao carregar anúncios descentralizados:', err);
+        }
+      };
+      
+      loadDecentralized();
+    }
+
     // Carregar anúncios disponíveis
     const loadAvailable = async () => {
       try {
         setLoadingAvailable(true);
         const response = await fetchAvailableAnnouncements(token);
         setAvailableAnnouncements(response.announcements || []);
+        
+        // Verificar se há novas mensagens e notificar
+        await notificationService.checkNow();
       } catch (err) {
         console.error('[Announcements] Erro ao carregar disponíveis:', err);
       } finally {
@@ -111,24 +144,38 @@ const AnnouncementsScreen = () => {
     // Atualizar anúncios disponíveis periodicamente (a cada 30s)
     const interval = setInterval(loadAvailable, 30000);
 
+    // Verificar mensagens P2P recebidas periodicamente
+    const p2pCheckInterval = setInterval(async () => {
+      // Em produção, isso seria uma callback de API nativa
+      // Por enquanto, verificar anúncios P2P recebidos do cache local
+      const receivedP2p = p2pService.getReceivedAnnouncements();
+      setP2pAnnouncements(receivedP2p);
+    }, 5000);
+
     return () => {
       locationService.stop();
+      notificationService.stop();
+      p2pService.stop();
       clearInterval(interval);
+      clearInterval(p2pCheckInterval);
     };
-  }, [token]);
+  }, [token, user]);
 
   const filteredAnnouncements = useMemo(() => {
     if (activeTab === 'available') {
       return availableAnnouncements;
+    }
+    if (activeTab === 'p2p') {
+      return p2pAnnouncements;
     }
     if (activeTab === 'recent') {
       return [...announcements].sort(
         (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
       );
     }
-    // Para 'all', devolvemos a lista completa
-    return announcements;
-  }, [announcements, availableAnnouncements, activeTab]);
+    // Para 'all', devolvemos a lista completa (incluindo P2P se houver)
+    return [...announcements, ...p2pAnnouncements];
+  }, [announcements, availableAnnouncements, p2pAnnouncements, activeTab]);
 
   const toggleLike = async (announcement: Announcement) => {
     if (!token) return;
@@ -238,9 +285,16 @@ const AnnouncementsScreen = () => {
           style={[styles.tab, activeTab === 'available' && styles.tabActive]}
           onPress={() => setActiveTab('available')}
         >
-          <Text style={styles.tabIcon}>📍</Text>
+          <View style={{ position: 'relative' }}>
+            <Text style={styles.tabIcon}>📍</Text>
+            {availableAnnouncements.length > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{availableAnnouncements.length}</Text>
+              </View>
+            )}
+          </View>
           <Text style={activeTab === 'available' ? styles.tabTextActive : styles.tabText}>
-            Disponíveis {availableAnnouncements.length > 0 && `(${availableAnnouncements.length})`}
+            Disponíveis
           </Text>
         </TouchableOpacity>
 
@@ -250,6 +304,21 @@ const AnnouncementsScreen = () => {
         >
           <Text style={styles.tabIcon}>🕐</Text>
           <Text style={activeTab === 'recent' ? styles.tabTextActive : styles.tabText}>Recente</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity 
+          style={[styles.tab, activeTab === 'p2p' && styles.tabActive]}
+          onPress={() => setActiveTab('p2p')}
+        >
+          <View style={{ position: 'relative' }}>
+            <Text style={styles.tabIcon}>📡</Text>
+            {p2pAnnouncements.length > 0 && (
+              <View style={styles.badge}>
+                <Text style={styles.badgeText}>{p2pAnnouncements.length}</Text>
+              </View>
+            )}
+          </View>
+          <Text style={activeTab === 'p2p' ? styles.tabTextActive : styles.tabText}>P2P</Text>
         </TouchableOpacity>
       </View>
 
@@ -274,7 +343,21 @@ const AnnouncementsScreen = () => {
           </View>
         )}
 
-        {!loading && !error && activeTab !== 'available' && filteredAnnouncements.length === 0 && (
+        {activeTab === 'p2p' && p2pAnnouncements.length === 0 && (
+          <View style={{ marginHorizontal: 16, marginTop: 24, padding: 16, backgroundColor: '#F3F4F6', borderRadius: 12 }}>
+            <Text style={{ color: '#6B7280', textAlign: 'center', marginBottom: 8 }}>
+              📡 Nenhum anúncio P2P recebido
+            </Text>
+            <Text style={{ color: '#9CA3AF', fontSize: 12, textAlign: 'center', marginBottom: 8 }}>
+              Anúncios recebidos via WiFi Direct aparecerão aqui
+            </Text>
+            <Text style={{ color: '#9CA3AF', fontSize: 11, textAlign: 'center' }}>
+              Para receber anúncios P2P, certifique-se de que o WiFi Direct está ativo e próximo de outros dispositivos
+            </Text>
+          </View>
+        )}
+
+        {!loading && !error && activeTab !== 'available' && activeTab !== 'p2p' && filteredAnnouncements.length === 0 && (
           <Text style={{ color: '#6B7280', marginHorizontal: 16 }}>Ainda não há anúncios.</Text>
         )}
 
@@ -515,6 +598,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#FFFFFF',
     fontWeight: '600',
+  },
+  badge: {
+    position: 'absolute',
+    top: -6,
+    right: -8,
+    backgroundColor: '#EF4444',
+    borderRadius: 10,
+    minWidth: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  badgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '700',
   },
   content: {
     flex: 1,

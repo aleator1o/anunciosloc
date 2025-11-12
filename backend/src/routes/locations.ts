@@ -22,11 +22,11 @@ const router = Router();
  *       200:
  *         description: Lista de locais
  */
-router.get("/", async (req, res) => {
-  const ownerId = req.query.ownerId as string | undefined;
+router.get("/", requireAuth, async (req: AuthenticatedRequest, res) => {
+  const ownerId = (req.query.ownerId as string | undefined) || req.userId;
 
   const locations = await prisma.location.findMany({
-    where: ownerId ? { ownerId } : undefined,
+    where: { ownerId },
     orderBy: { createdAt: "desc" },
   });
 
@@ -147,12 +147,20 @@ router.put("/:id", requireAuth, async (req: AuthenticatedRequest, res) => {
  *         description: Local não encontrado
  */
 router.delete("/:id", requireAuth, async (req: AuthenticatedRequest, res) => {
-  const location = await prisma.location.findUnique({ where: { id: req.params.id } });
-  if (!location || location.ownerId !== req.userId) {
+  const locationId = req.params.id;
+  const userId = req.userId!;
+
+  const location = await prisma.location.findUnique({ where: { id: locationId } });
+  
+  if (!location) {
     return res.status(404).json({ message: "Local não encontrado" });
   }
 
-  await prisma.location.delete({ where: { id: req.params.id } });
+  if (location.ownerId !== userId) {
+    return res.status(403).json({ message: "Não tem permissão para remover este local" });
+  }
+
+  await prisma.location.delete({ where: { id: locationId } });
 
   res.status(204).send();
 });

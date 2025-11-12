@@ -80,6 +80,107 @@ router.get("/", requireAuth, async (req: AuthenticatedRequest, res) => {
   res.json({ announcements: filtered });
 });
 
+/**
+ * @openapi
+ * /api/announcements/decentralized:
+ *   get:
+ *     summary: Listar anúncios descentralizados do utilizador (para publicação P2P)
+ *     tags:
+ *       - Anúncios
+ *     security:
+ *       - bearerAuth: []
+ *     responses:
+ *       200:
+ *         description: Lista de anúncios descentralizados do utilizador
+ */
+router.get("/decentralized", requireAuth, async (req: AuthenticatedRequest, res) => {
+  const announcements = await prisma.announcement.findMany({
+    where: {
+      authorId: req.userId!,
+      deliveryMode: "DECENTRALIZED",
+    },
+    include: {
+      location: { select: { id: true, name: true, type: true, latitude: true, longitude: true, radiusMeters: true, identifiers: true } },
+    },
+    orderBy: { createdAt: "desc" },
+  });
+
+  res.json({ announcements });
+});
+
+/**
+ * @openapi
+ * /api/announcements/{id}/verify-location:
+ *   post:
+ *     summary: Verificar se utilizador está no local de destino do anúncio (para modo descentralizado)
+ *     tags:
+ *       - Anúncios
+ *     security:
+ *       - bearerAuth: []
+ *     parameters:
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *     responses:
+ *       200:
+ *         description: Verificação de localização
+ *       404:
+ *         description: Anúncio não encontrado
+ */
+router.post("/:id/verify-location", requireAuth, async (req: AuthenticatedRequest, res) => {
+  const announcement = await prisma.announcement.findUnique({
+    where: { id: req.params.id },
+    include: {
+      location: true,
+    },
+  });
+
+  if (!announcement) {
+    return res.status(404).json({ message: "Anúncio não encontrado" });
+  }
+
+  if (announcement.deliveryMode !== "DECENTRALIZED") {
+    return res.status(400).json({ message: "Anúncio não é descentralizado" });
+  }
+
+  const presence = await prisma.userLocationStatus.findUnique({
+    where: { userId: req.userId! },
+  });
+
+  if (!presence || !announcement.location) {
+    return res.json({ isAtLocation: false, reason: "Sem localização ou anúncio sem local" });
+  }
+
+  const location = announcement.location;
+  let isAtLocation = false;
+
+  if (location.type === "GEO") {
+    if (
+      presence.latitude != null &&
+      presence.longitude != null &&
+      location.latitude != null &&
+      location.longitude != null &&
+      location.radiusMeters != null
+    ) {
+      isAtLocation = isInsideGeo(
+        presence.latitude,
+        presence.longitude,
+        location.latitude,
+        location.longitude,
+        location.radiusMeters
+      );
+    }
+  } else {
+    const userWifiSet = new Set((presence.wifiIds ?? []).map(w => w.toLowerCase()));
+    const locIds = (location.identifiers ?? []).map(w => w.toLowerCase());
+    isAtLocation = locIds.some(id => userWifiSet.has(id));
+  }
+
+  res.json({ isAtLocation });
+});
+
 function isInsideGeo(
   userLat: number,
   userLng: number,

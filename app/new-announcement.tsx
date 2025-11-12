@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { useAuth } from './context/AuthContext';
 import { api, fetchPublicProfileKeys } from './lib/api';
+import { p2pService } from './lib/p2pService';
 
 const NewAnnouncementScreen = () => {
   const router = useRouter();
@@ -97,6 +98,23 @@ const NewAnnouncementScreen = () => {
         },
         token,
       );
+
+      // Se for anúncio descentralizado, adicionar ao cache P2P
+      if (deliveryMode === 'DECENTRALIZED') {
+        try {
+          // Buscar o anúncio criado para adicionar ao cache
+          const response = await api.get<{ announcements: any[] }>('/announcements', token);
+          const createdAnnouncement = response.announcements.find(
+            (a: any) => a.content === message && a.deliveryMode === 'DECENTRALIZED'
+          );
+          if (createdAnnouncement) {
+            p2pService.addLocalAnnouncement(createdAnnouncement);
+            p2pService.startPublishing();
+          }
+        } catch (err) {
+          console.warn('[NewAnnouncement] Erro ao adicionar anúncio ao cache P2P:', err);
+        }
+      }
 
       Alert.alert('Sucesso', 'Anúncio publicado com sucesso!', [
         {

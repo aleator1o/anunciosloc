@@ -143,13 +143,97 @@ export async function getCurrentGPSLocation(): Promise<{ latitude: number; longi
 }
 
 /**
- * Helper para obter WiFi IDs (simulado - em produção seria necessário usar APIs nativas)
- * Por enquanto, retorna array vazio ou valores de teste
+ * Helper para obter WiFi IDs
+ * 
+ * NOTA: A leitura de WiFi SSIDs requer APIs nativas que não estão disponíveis no Expo Go.
+ * Para produção, você precisará:
+ * 1. Criar um módulo nativo customizado (expo-dev-client)
+ * 2. Usar uma biblioteca como react-native-wifi-reborn (requer eject ou bare workflow)
+ * 3. Ou permitir que o usuário insira manualmente os WiFi IDs
+ * 
+ * Esta implementação:
+ * - Tenta detectar se há APIs nativas disponíveis
+ * - Retorna array vazio se não houver suporte
+ * - Pode ser estendida com módulos nativos customizados
  */
 export async function getCurrentWiFiIds(): Promise<string[]> {
-  // Em produção, isso requereria APIs nativas do Android/iOS
-  // Por enquanto, retornamos array vazio ou valores de teste
-  // O utilizador pode inserir manualmente na UI
-  return [];
+  if (Platform.OS === 'web') {
+    // No web, não há acesso a WiFi IDs
+    return [];
+  }
+
+  try {
+    // Tentar usar APIs nativas se disponíveis
+    // Para Expo Go, isso não funcionará, mas podemos preparar para desenvolvimento nativo
+    
+    // Opção 1: Tentar usar expo-network (se disponível)
+    try {
+      const Network = require('expo-network');
+      if (Network && Network.getNetworkStateAsync) {
+        const networkState = await Network.getNetworkStateAsync();
+        // expo-network não fornece SSID diretamente, mas podemos verificar se está conectado
+        if (networkState.type === 'WIFI' && networkState.isConnected) {
+          // SSID não está disponível via expo-network
+          console.log('[LocationService] Conectado via WiFi, mas SSID não disponível via Expo');
+        }
+      }
+    } catch (e) {
+      // expo-network não está instalado ou não disponível
+    }
+
+    // Opção 2: Usar módulo nativo Expo WiFi Direct
+    try {
+      const ExpoWifiDirect = require('../../modules/expo-wifi-direct/src').default;
+      if (ExpoWifiDirect && ExpoWifiDirect.isSupported && ExpoWifiDirect.isSupported()) {
+        const ssid = await ExpoWifiDirect.getCurrentSSID();
+        if (ssid) {
+          return [ssid];
+        }
+      }
+    } catch (e) {
+      console.warn('[LocationService] Expo WiFi Direct não disponível para SSID');
+    }
+
+    // Opção 3: react-native-wifi-reborn (alternativa)
+    try {
+      const WifiManager = require('react-native-wifi-reborn').default;
+      if (WifiManager && WifiManager.getCurrentWifiSSID) {
+        const ssid = await WifiManager.getCurrentWifiSSID();
+        return ssid ? [ssid] : [];
+      }
+    } catch (e) {
+      console.warn('[LocationService] react-native-wifi-reborn não disponível');
+    }
+
+    // Por enquanto, retornamos array vazio
+    // O usuário pode inserir WiFi IDs manualmente na UI se necessário
+    return [];
+  } catch (error) {
+    console.warn('[LocationService] Erro ao obter WiFi IDs:', error);
+    return [];
+  }
+}
+
+/**
+ * Valida se um WiFi ID está em formato válido
+ * @param wifiId WiFi ID a validar
+ * @returns true se válido, false caso contrário
+ */
+export function isValidWiFiId(wifiId: string): boolean {
+  if (!wifiId || wifiId.trim().length === 0) {
+    return false;
+  }
+  // WiFi SSIDs geralmente têm entre 1 e 32 caracteres
+  // Podem conter letras, números, espaços e alguns caracteres especiais
+  return wifiId.trim().length >= 1 && wifiId.trim().length <= 32;
+}
+
+/**
+ * Normaliza um WiFi ID (remove espaços extras, etc.)
+ * @param wifiId WiFi ID a normalizar
+ * @returns WiFi ID normalizado
+ */
+export function normalizeWiFiId(wifiId: string): string {
+  return wifiId.trim();
 }
 

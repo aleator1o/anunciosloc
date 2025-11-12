@@ -59,12 +59,34 @@ const LocationsScreen = () => {
   const deleteLocation = async (locationId: string) => {
     if (!token) return;
 
-    try {
-      await api.delete(`/locations/${locationId}`, token);
-      setLocations((prev) => prev.filter((location) => location.id !== locationId));
-    } catch (err) {
-      Alert.alert('Erro', (err as Error).message ?? 'Não foi possível remover o local');
-    }
+    const location = locations.find(l => l.id === locationId);
+    const locationName = location?.name || 'este local';
+
+    Alert.alert(
+      'Confirmar Remoção',
+      `Tem certeza que deseja remover "${locationName}"? Esta ação não pode ser desfeita.`,
+      [
+        {
+          text: 'Cancelar',
+          style: 'cancel',
+        },
+        {
+          text: 'Remover',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.delete(`/locations/${locationId}`, token);
+              setLocations((prev) => prev.filter((location) => location.id !== locationId));
+              Alert.alert('Sucesso', 'Local removido com sucesso!');
+            } catch (err) {
+              const errorMessage = (err as Error).message ?? 'Não foi possível remover o local';
+              console.error('[Locations] Erro ao remover local:', err);
+              Alert.alert('Erro', errorMessage);
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (

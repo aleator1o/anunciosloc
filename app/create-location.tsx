@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { useAuth } from './context/AuthContext';
 import { api } from './lib/api';
+import { getCurrentWiFiIds, isValidWiFiId, normalizeWiFiId } from './lib/locationService';
 
 const CreateLocationScreen = () => {
   const router = useRouter();
@@ -70,6 +71,20 @@ const CreateLocationScreen = () => {
         Alert.alert('Erro', 'Insira pelo menos um identificador WiFi/BLE');
         return;
       }
+      
+      // Validar cada WiFi ID
+      const ids = wifiIds.split(',').map(id => normalizeWiFiId(id)).filter(Boolean);
+      const invalidIds = ids.filter(id => !isValidWiFiId(id));
+      
+      if (invalidIds.length > 0) {
+        Alert.alert('Erro', `IDs inválidos: ${invalidIds.join(', ')}\n\nOs IDs devem ter entre 1 e 32 caracteres.`);
+        return;
+      }
+      
+      if (ids.length === 0) {
+        Alert.alert('Erro', 'Insira pelo menos um identificador WiFi/BLE válido');
+        return;
+      }
     }
 
     try {
@@ -95,7 +110,7 @@ const CreateLocationScreen = () => {
         longitude: locationType === 'GPS' ? longitudeValue : undefined,
         radiusMeters: locationType === 'GPS' ? radiusValue : undefined,
         type: locationType === 'GPS' ? 'GEO' : 'WIFI',
-        identifiers: locationType === 'WiFi/BLE' ? wifiIds.split(',').map((id) => id.trim()).filter(Boolean) : [],
+        identifiers: locationType === 'WiFi/BLE' ? wifiIds.split(',').map((id) => normalizeWiFiId(id)).filter(Boolean) : [],
       };
 
       await api.post('/locations', payload, token);
@@ -278,16 +293,47 @@ const CreateLocationScreen = () => {
               </Text>
               <TextInput
                 style={[styles.input, styles.textArea]}
-                placeholder="wifi-ssid-1, beacon-uuid-2, ble-mac-address"
+                placeholder="Ex: Hub WiFi Camama, Belas Shopping WiFi"
                 placeholderTextColor="#9CA3AF"
                 value={wifiIds}
                 onChangeText={setWifiIds}
                 multiline
                 numberOfLines={3}
+                autoCapitalize="none"
+                autoCorrect={false}
               />
               <Text style={styles.helperText}>
-                Adicione os identificadores de rede WiFi ou BLE
+                Adicione os SSIDs de rede WiFi ou identificadores BLE separados por vírgula
               </Text>
+              
+              <TouchableOpacity 
+                style={styles.detectButton}
+                onPress={async () => {
+                  try {
+                    const detectedIds = await getCurrentWiFiIds();
+                    if (detectedIds.length > 0) {
+                      const currentIds = wifiIds ? wifiIds.split(',').map(id => id.trim()).filter(Boolean) : [];
+                      const allIds = [...new Set([...currentIds, ...detectedIds])];
+                      setWifiIds(allIds.join(', '));
+                      Alert.alert('Sucesso', `Detectado: ${detectedIds.join(', ')}`);
+                    } else {
+                      Alert.alert(
+                        'WiFi não detectado',
+                        'Não foi possível detectar o WiFi atual automaticamente. Isso pode acontecer porque:\n\n' +
+                        '• Você está usando Expo Go (requer módulo nativo)\n' +
+                        '• O WiFi não está conectado\n' +
+                        '• Permissões não foram concedidas\n\n' +
+                        'Você pode inserir o SSID manualmente no campo acima.'
+                      );
+                    }
+                  } catch (error) {
+                    Alert.alert('Erro', 'Não foi possível detectar o WiFi. Insira manualmente.');
+                  }
+                }}
+              >
+                <Text style={styles.detectButtonIcon}>📶</Text>
+                <Text style={styles.detectButtonText}>Detectar WiFi Atual</Text>
+              </TouchableOpacity>
             </View>
           </View>
         )}
@@ -516,6 +562,26 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#06B6D4',
+  },
+  detectButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 12,
+    paddingVertical: 12,
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  detectButtonIcon: {
+    fontSize: 18,
+    marginRight: 8,
+  },
+  detectButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#6B7280',
   },
   helperText: {
     fontSize: 12,
