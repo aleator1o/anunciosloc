@@ -34,3 +34,5 @@ export default function RootLayout() {
     </Stack>
   );
 }
+
+// Bora verificar a implementação
