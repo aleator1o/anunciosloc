@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -8,11 +8,20 @@ import {
   SafeAreaView,
   StatusBar,
   ScrollView,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
+import { useAuth } from './context/AuthContext';
+import { api } from './lib/api';
+import { Location } from '../types/api';
 
 const LocationsScreen = () => {
   const router = useRouter();
+  const { token } = useAuth();
   const [activeTab, setActiveTab] = useState('locations');
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const handleNavigation = (tab: string) => {
     setActiveTab(tab);
@@ -25,43 +34,60 @@ const LocationsScreen = () => {
     }
   };
 
-  const myLocations = [
-    {
-      id: 1,
-      name: 'Largo da Independência',
-      latitude: -8.8139,
-      longitude: 13.2319,
-      radius: 20,
-      icon: '📍',
-      color: '#06B6D4',
-    },
-    {
-      id: 2,
-      name: 'Belas Shopping',
-      latitude: -8.9167,
-      longitude: 13.1833,
-      radius: 50,
-      icon: '🛒',
-      color: '#F97316',
-    },
-    {
-      id: 3,
-      name: 'Ginásio do Camama I',
-      type: 'WiFi/BLE',
-      identifiers: ['gym-camama-1', 'beacon-fitness'],
-      icon: '📶',
-      color: '#10B981',
-    },
-    {
-      id: 4,
-      name: 'Universidade Agostinho Neto',
-      latitude: -8.8390,
-      longitude: 13.2894,
-      radius: 100,
-      icon: '🎓',
-      color: '#8B5CF6',
-    },
-  ];
+  useEffect(() => {
+    if (!token) {
+      router.replace('/login');
+      return;
+    }
+
+    const fetchLocations = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const response = await api.get<{ locations: Location[] }>('/locations', token);
+        setLocations(response.locations);
+      } catch (err) {
+        setError((err as Error).message ?? 'Não foi possível carregar os locais');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchLocations();
+  }, [token, router]);
+
+  const deleteLocation = async (locationId: string) => {
+    if (!token) return;
+
+    const location = locations.find(l => l.id === locationId);
+    const locationName = location?.name || 'este local';
+
+    Alert.alert(
+      'Confirmar Remoção',
+      `Tem certeza que deseja remover "${locationName}"? Esta ação não pode ser desfeita.`,
+      [
+        {
+          text: 'Cancelar',
+          style: 'cancel',
+        },
+        {
+          text: 'Remover',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await api.delete(`/locations/${locationId}`, token);
+              setLocations((prev) => prev.filter((location) => location.id !== locationId));
+              Alert.alert('Sucesso', 'Local removido com sucesso!');
+            } catch (err) {
+              const errorMessage = (err as Error).message ?? 'Não foi possível remover o local';
+              console.error('[Locations] Erro ao remover local:', err);
+              Alert.alert('Erro', errorMessage);
+            }
+          },
+        },
+      ]
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -83,33 +109,47 @@ const LocationsScreen = () => {
         {/* Section Title */}
         <Text style={styles.sectionTitle}>Meus Locais</Text>
 
-        {/* Locations List */}
-        {myLocations.map((location) => (
-          <View key={location.id} style={styles.locationCard}>
-            <View style={[styles.locationIcon, { backgroundColor: location.color }]}>
-              <Text style={styles.locationIconText}>{location.icon}</Text>
-            </View>
-            
-            <View style={styles.locationDetails}>
-              <Text style={styles.locationName}>{location.name}</Text>
-              
-              {location.latitude && location.longitude ? (
-                <Text style={styles.locationInfo}>
-                  Lat: {location.latitude}, Lon: {location.longitude}, Raio: {location.radius}m
-                </Text>
-              ) : (
-                <Text style={styles.locationInfo}>
-                  IDs WiFi/BLE: [{location.identifiers?.join(', ')}]
-                </Text>
-              )}
-            </View>
+        {loading && <ActivityIndicator color="#06B6D4" style={{ marginVertical: 24 }} />}
 
-            <TouchableOpacity style={styles.menuButton}>
-              <Text style={styles.menuIcon}>⋮</Text>
-            </TouchableOpacity>
-          </View>
-        ))}
-        
+        {error && !loading && (
+          <Text style={{ color: '#EF4444', marginBottom: 12 }}>{error}</Text>
+        )}
+
+        {!loading && !error && locations.length === 0 && (
+          <Text style={{ color: '#6B7280' }}>Ainda não há locais registados.</Text>
+        )}
+
+        {!loading &&
+          !error &&
+          locations.map((location) => (
+            <View key={location.id} style={styles.locationCard}>
+              <View style={[styles.locationIcon, { backgroundColor: '#06B6D4' }]}>
+                <Text style={styles.locationIconText}>{location.type === 'GEO' ? '📍' : '📶'}</Text>
+              </View>
+
+              <View style={styles.locationDetails}>
+                <Text style={styles.locationName}>{location.name}</Text>
+
+                {location.latitude !== undefined && location.latitude !== null && location.longitude !== undefined && location.longitude !== null ? (
+                  <Text style={styles.locationInfo}>
+                    Lat: {location.latitude?.toFixed(4)} • Lon: {location.longitude?.toFixed(4)}
+                  </Text>
+                ) : (
+                  <Text style={styles.locationInfo}>
+                    IDs WiFi/BLE: {location.identifiers.join(', ') || 'n/d'}
+                  </Text>
+                )}
+                {location.radiusMeters && (
+                  <Text style={styles.locationInfo}>Raio: {location.radiusMeters} m</Text>
+                )}
+              </View>
+
+              <TouchableOpacity style={styles.menuButton} onPress={() => deleteLocation(location.id)}>
+                <Text style={styles.menuIcon}>🗑️</Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+
         <View style={{ height: 100 }} />
       </ScrollView>
 

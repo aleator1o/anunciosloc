@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import {
@@ -11,51 +11,21 @@ import {
   SafeAreaView,
   StatusBar,
   ScrollView,
+  ActivityIndicator,
 } from 'react-native';
+import { api } from './lib/api';
+import { useAuth } from './context/AuthContext';
+import { Announcement, Location } from '../types/api';
 
 const HomeScreen = () => {
   const router = useRouter();
+  const { token, user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeTab, setActiveTab] = useState('home');
-
-  const locations = [
-    {
-      id: 1,
-      name: 'Largo da Independência',
-      category: 'Centro Histórico',
-      distance: '0.8 km',
-      announcements: 3,
-      users: 12,
-      status: 'Ativo',
-      connection: 'GPS',
-      icon: '📍',
-      color: '#06B6D4',
-    },
-    {
-      id: 2,
-      name: 'Belas Shopping',
-      category: 'Centro Comercial',
-      distance: '1.2 km',
-      announcements: 8,
-      users: 24,
-      status: 'Ativo',
-      connection: 'WiFi',
-      icon: '🛒',
-      color: '#F97316',
-    },
-    {
-      id: 3,
-      name: 'Ginásio do Camama I',
-      category: 'Desporto',
-      distance: '2.1 km',
-      announcements: 5,
-      users: 8,
-      status: 'Ativo',
-      connection: 'BLE',
-      icon: '🏋️',
-      color: '#10B981',
-    },
-  ];
+  const [locations, setLocations] = useState<Location[]>([]);
+  const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const handleNavigation = (tab: string) => {
     setActiveTab(tab);
@@ -66,15 +36,55 @@ const HomeScreen = () => {
     } else if (tab === 'profile') {
       router.push('/profile');
     }
-  }
+  };
 
   const insets = useSafeAreaInsets();
 
+  useEffect(() => {
+    if (!token) {
+      router.replace('/login');
+      return;
+    }
+
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+        const [announcementsResponse, locationsResponse] = await Promise.all([
+          api.get<{ announcements: Announcement[] }>('/announcements', token),
+          api.get<{ locations: Location[] }>('/locations', token),
+        ]);
+
+        setAnnouncements(announcementsResponse.announcements);
+        setLocations(locationsResponse.locations);
+      } catch (err) {
+        setError((err as Error).message ?? 'Não foi possível carregar os dados');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, [token, router]);
+
+  const filteredLocations = useMemo(() => {
+    return locations.filter((location) =>
+      location.name.toLowerCase().includes(searchQuery.toLowerCase()),
+    );
+  }, [locations, searchQuery]);
+
+  const stats = useMemo(() => {
+    return {
+      locations: locations.length,
+      announcements: announcements.length,
+      likes: announcements.reduce((total, current) => total + current.reactions.length, 0),
+    };
+  }, [locations, announcements]);
 
   return (
     <SafeAreaView style={[styles.container, { paddingTop: insets.top }]}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFFFFF" />
-      
+
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
@@ -87,7 +97,7 @@ const HomeScreen = () => {
           <TouchableOpacity style={styles.iconButton}>
             <Text style={styles.icon}>🔔</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={styles.iconButton}>
+          <TouchableOpacity style={styles.iconButton} onPress={() => router.push('/profile')}>
             <Text style={styles.icon}>👤</Text>
           </TouchableOpacity>
         </View>
@@ -97,7 +107,7 @@ const HomeScreen = () => {
         {/* Welcome Card */}
         <View style={styles.welcomeCard}>
           <View style={styles.welcomeContent}>
-            <Text style={styles.welcomeTitle}>Bem-vindo ao{'\n'}AnunciosLoc</Text>
+            <Text style={styles.welcomeTitle}>Bem-vindo{user ? `, ${user.username}` : ''}</Text>
             <Text style={styles.welcomeText}>
               Descubra anúncios baseados na sua localização. Conecte-se com a sua comunidade local.
             </Text>
@@ -106,7 +116,7 @@ const HomeScreen = () => {
               <Text style={styles.wifiText}>📶 WiFi Direct Ativo</Text>
             </View>
           </View>
-          <TouchableOpacity style={styles.megaphoneButton}>
+          <TouchableOpacity style={styles.megaphoneButton} onPress={() => router.push('/new-announcement')}>
             <Text style={styles.megaphoneIcon}>📢</Text>
           </TouchableOpacity>
         </View>
@@ -123,83 +133,74 @@ const HomeScreen = () => {
           />
         </View>
 
-        {/* Category Tabs */}
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          style={styles.categoryTabs}
-        >
-          <TouchableOpacity style={[styles.categoryTab, styles.categoryTabActive]}>
-            <Text style={styles.categoryIcon}>☰</Text>
-            <Text style={styles.categoryTextActive}>Todos</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.categoryTab}>
-            <Text style={styles.categoryIcon}>🛒</Text>
-            <Text style={styles.categoryText}>Comércio</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={styles.categoryTab}>
-            <Text style={styles.categoryIcon}>🎓</Text>
-            <Text style={styles.categoryText}>Educação</Text>
-          </TouchableOpacity>
-        </ScrollView>
-
         {/* Stats Cards */}
         <View style={styles.statsContainer}>
           <View style={styles.statCard}>
-            <Text style={styles.statNumber}>12</Text>
+            <Text style={styles.statNumber}>{stats.locations}</Text>
             <Text style={styles.statLabel}>Locais</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={[styles.statNumber, { color: '#F97316' }]}>47</Text>
+            <Text style={[styles.statNumber, { color: '#F97316' }]}>{stats.announcements}</Text>
             <Text style={styles.statLabel}>Anúncios</Text>
           </View>
           <View style={styles.statCard}>
-            <Text style={[styles.statNumber, { color: '#10B981' }]}>156</Text>
-            <Text style={styles.statLabel}>Utilizadores</Text>
+            <Text style={[styles.statNumber, { color: '#10B981' }]}>{stats.likes}</Text>
+            <Text style={styles.statLabel}>Gostos</Text>
           </View>
         </View>
 
         {/* Locations List */}
         <Text style={styles.sectionTitle}>Locais Próximos</Text>
-        
-        {locations.map((location) => (
-          <TouchableOpacity key={location.id} style={styles.locationCard}>
-            <View style={[styles.locationIcon, { backgroundColor: location.color }]}>
-              <Text style={styles.locationIconText}>{location.icon}</Text>
-            </View>
-            
-            <View style={styles.locationDetails}>
-              <View style={styles.locationHeader}>
-                <Text style={styles.locationName}>{location.name}</Text>
-                <View style={styles.statusBadge}>
-                  <Text style={styles.statusText}>{location.status}</Text>
-                </View>
+
+        {loading && <ActivityIndicator color="#06B6D4" style={{ marginVertical: 24 }} />}
+
+        {error && !loading && (
+          <Text style={{ color: '#EF4444', marginBottom: 12 }}>{error}</Text>
+        )}
+
+        {!loading && !error && filteredLocations.length === 0 && (
+          <Text style={{ color: '#6B7280' }}>Nenhum local encontrado.</Text>
+        )}
+
+        {!loading &&
+          !error &&
+          filteredLocations.map((location) => (
+            <TouchableOpacity key={location.id} style={styles.locationCard}>
+              <View style={[styles.locationIcon, { backgroundColor: '#06B6D4' }]}>
+                <Text style={styles.locationIconText}>📍</Text>
               </View>
-              
-              <Text style={styles.locationCategory}>
-                {location.category} • {location.distance}
-              </Text>
-              
-              <View style={styles.locationFooter}>
-                <Text style={styles.locationStats}>
-                  {location.announcements} anúncios ativos • {location.users} utilizadores próximos
+
+              <View style={styles.locationDetails}>
+                <View style={styles.locationHeader}>
+                  <Text style={styles.locationName}>{location.name}</Text>
+                  <View style={styles.statusBadge}>
+                    <Text style={styles.statusText}>{location.type}</Text>
+                  </View>
+                </View>
+
+                <Text style={styles.locationCategory}>
+                  {location.type === 'GEO'
+                    ? `Lat ${location.latitude ?? '-'}, Lng ${location.longitude ?? '-'}`
+                    : `IDs: ${location.identifiers.join(', ') || 'n/d'}`}
                 </Text>
-                <View style={styles.connectionBadge}>
-                  <Text style={styles.connectionText}>📶 {location.connection}</Text>
+
+                <View style={styles.locationFooter}>
+                  <Text style={styles.locationStats}>
+                    Criado em {new Date(location.createdAt).toLocaleDateString()}
+                  </Text>
                 </View>
               </View>
-            </View>
-            
-            <Text style={styles.chevron}>›</Text>
-          </TouchableOpacity>
-        ))}
-        
+
+              <Text style={styles.chevron}>›</Text>
+            </TouchableOpacity>
+          ))}
+
         <View style={{ height: 20 }} />
       </ScrollView>
 
       {/* Bottom Navigation */}
       <View style={styles.bottomNav}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[styles.navItem, activeTab === 'home' && styles.navItemActive]}
           onPress={() => handleNavigation('home')}
         >
@@ -209,30 +210,21 @@ const HomeScreen = () => {
           <Text style={activeTab === 'home' ? styles.navTextActive : styles.navText}>Início</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={styles.navItem}
-          onPress={() => handleNavigation('announcements')}
-        >
+        <TouchableOpacity style={styles.navItem} onPress={() => handleNavigation('announcements')}>
           <View style={styles.navIcon}>
             <Text style={styles.navIconText}>📢</Text>
           </View>
           <Text style={styles.navText}>Anúncios</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={styles.navItem}
-          onPress={() => handleNavigation('locations')}
-        >
+        <TouchableOpacity style={styles.navItem} onPress={() => handleNavigation('locations')}>
           <View style={styles.navIcon}>
             <Text style={styles.navIconText}>📍</Text>
           </View>
           <Text style={styles.navText}>Locais</Text>
         </TouchableOpacity>
 
-        <TouchableOpacity 
-          style={styles.navItem}
-          onPress={() => handleNavigation('profile')}
-        >
+        <TouchableOpacity style={styles.navItem} onPress={() => handleNavigation('profile')}>
           <View style={styles.navIcon}>
             <Text style={styles.navIconText}>👤</Text>
           </View>
