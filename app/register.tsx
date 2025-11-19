@@ -8,21 +8,31 @@ import {
   StyleSheet,
   SafeAreaView,
   StatusBar,
+  ActivityIndicator,
+  Alert,
 } from 'react-native';
+import { useAuth } from './context/AuthContext';
 
 const RegisterScreen = () => {
   const router = useRouter();
+  const { register, loading } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [email, setEmail] = useState('');
 
-  const handleRegister = () => {
+  const handleRegister = async () => {
     if (password !== confirmPassword) {
       alert('As palavras-passe não coincidem');
       return;
     }
-    console.log('Register attempt:', { username, password });
-    // Implementar lógica de registro aqui
+    try {
+      await register(username, email, password);
+      Alert.alert('Sucesso', 'Conta criada com sucesso');
+      router.replace('/home');
+    } catch (error) {
+      Alert.alert('Erro', (error as Error).message ?? 'Falha ao registar');
+    }
   };
 
   const handleGoBack = () => {
@@ -48,6 +58,18 @@ const RegisterScreen = () => {
             onChangeText={setUsername}
             autoCapitalize="none"
             autoCorrect={false}
+          />
+
+          {/* Email Input */}
+          <TextInput
+            style={styles.input}
+            placeholder="Email"
+            placeholderTextColor="#9CA3AF"
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            autoCorrect={false}
+            keyboardType="email-address"
           />
 
           {/* Password Input */}
@@ -79,8 +101,13 @@ const RegisterScreen = () => {
             style={styles.registerButton}
             onPress={handleRegister}
             activeOpacity={0.8}
+            disabled={loading}
           >
-            <Text style={styles.registerButtonText}>Registar</Text>
+            {loading ? (
+              <ActivityIndicator color="#FFFFFF" />
+            ) : (
+              <Text style={styles.registerButtonText}>Registar</Text>
+            )}
           </TouchableOpacity>
         </View>
       </View>

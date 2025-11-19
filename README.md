@@ -1,50 +1,59 @@
-# Welcome to your Expo app 👋
+# AnunciosLoc – Frontend (Expo)
 
-This is an [Expo](https://expo.dev) project created with [`create-expo-app`](https://www.npmjs.com/package/create-expo-app).
+Aplicação móvel Expo Router ligada ao backend Node.js/Prisma.
 
-## Get started
+## Pré-requisitos
 
-1. Install dependencies
+- Node.js 18+
+- Backend a correr em `http://localhost:4000` (ver `backend/README.md`)
+
+## Configuração
+
+1. Instalar dependências
 
    ```bash
    npm install
    ```
 
-2. Start the app
+2. Definir a URL da API (opcional)
+
+   Por padrão, usamos `http://127.0.0.1:4000/api` no iOS e `http://10.0.2.2:4000/api` no Android. Para dispositivos físicos ou outra rede, defina `EXPO_PUBLIC_API_URL`:
 
    ```bash
-   npx expo start
+   # PowerShell (Windows)
+   $Env:EXPO_PUBLIC_API_URL="http://SEU_IP_LOCAL:4000/api"
+
+   # macOS/Linux
+   export EXPO_PUBLIC_API_URL="http://SEU_IP_LOCAL:4000/api"
    ```
 
-In the output, you'll find options to open the app in a
+3. Iniciar o app
 
-- [development build](https://docs.expo.dev/develop/development-builds/introduction/)
-- [Android emulator](https://docs.expo.dev/workflow/android-studio-emulator/)
-- [iOS simulator](https://docs.expo.dev/workflow/ios-simulator/)
-- [Expo Go](https://expo.dev/go), a limited sandbox for trying out app development with Expo
+   ```bash
+   npx expo start --lan
+   ```
 
-You can start developing by editing the files inside the **app** directory. This project uses [file-based routing](https://docs.expo.dev/router/introduction).
+   Abra com Expo Go ou um emulador. Certifique-se de que o backend está acessível a partir do dispositivo.
 
-## Get a fresh project
+## Funcionalidades
 
-When you're ready, run:
+- Autenticação (login/registo) usando o backend Node.js
+- Listagem e criação de anúncios
+- Listagem e criação de locais (GPS ou WiFi/BLE)
+- Perfis com logout
+- Swagger disponível no backend em `http://localhost:4000/docs`
+
+## Estrutura
+
+- `app/context/AuthContext.tsx` – estado global de autenticação
+- `app/lib/api.ts` – cliente HTTP
+- `app/types/api.ts` – tipos partilhados
+- `app/home.tsx`, `app/announcements.tsx`, `app/locations.tsx` – ecrãs ligados ao backend
+
+## Comandos úteis
 
 ```bash
-npm run reset-project
+npx expo start --lan        # iniciar com rede local
+npx expo run:android        # build nativa
+npx expo start --clear      # limpar cache
 ```
-
-This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
-
-## Learn more
-
-To learn more about developing your project with Expo, look at the following resources:
-
-- [Expo documentation](https://docs.expo.dev/): Learn fundamentals, or go into advanced topics with our [guides](https://docs.expo.dev/guides).
-- [Learn Expo tutorial](https://docs.expo.dev/tutorial/introduction/): Follow a step-by-step tutorial where you'll create a project that runs on Android, iOS, and the web.
-
-## Join the community
-
-Join our community of developers creating universal apps.
-
-- [Expo on GitHub](https://github.com/expo/expo): View our open source platform and contribute.
-- [Discord community](https://chat.expo.dev): Chat with Expo users and ask questions.
