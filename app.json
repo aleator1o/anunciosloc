@@ -27,8 +27,18 @@
         "ACCESS_COARSE_LOCATION",
         "CHANGE_NETWORK_STATE",
         "INTERNET",
-        "ACCESS_NETWORK_STATE"
-      ]
+        "ACCESS_NETWORK_STATE",
+        "android.permission.NEARBY_WIFI_DEVICES",
+        "ACCESS_WIFI_STATE",
+        "CHANGE_WIFI_STATE",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "CHANGE_NETWORK_STATE",
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "android.permission.NEARBY_WIFI_DEVICES"
+      ],
+      "package": "com.anonymous.anunciosloc"
     },
     "web": {
       "output": "static",

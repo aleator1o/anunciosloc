@@ -28,7 +28,9 @@ module.exports = function withExpoWifiDirect(config) {
     });
 
     // Android 13+ requer permissão adicional
-    if (androidManifest.$['android:targetSdkVersion'] >= 33) {
+    // Checar targetSdkVersion a partir do config (mais confiável durante prebuild) ou do manifest
+    const targetSdk = config?.android?.targetSdkVersion ?? (androidManifest?.$ && androidManifest.$['android:targetSdkVersion']);
+    if (targetSdk >= 33) {
       const nearbyPermission = 'android.permission.NEARBY_WIFI_DEVICES';
       if (!androidManifest['uses-permission'].some(p => p.$['android:name'] === nearbyPermission)) {
         androidManifest['uses-permission'].push({
