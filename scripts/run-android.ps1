@@ -5,10 +5,25 @@ param()
 
 function Run-Command($cmd, $errorMessage) {
   Write-Host "\n> $cmd" -ForegroundColor Cyan
-  $proc = Start-Process -FilePath pwsh -ArgumentList "-NoProfile","-NoLogo","-Command","& { $cmd }" -NoNewWindow -Wait -PassThru
-  if ($proc.ExitCode -ne 0) {
+  $cwd = (Get-Location).ProviderPath
+  $log = Join-Path $cwd "build.log"
+  if (Test-Path $log) { Remove-Item $log -ErrorAction SilentlyContinue }
+
+  # Run via cmd.exe and capture output to log; then show last lines and on failure print full log
+  & cmd.exe /c $cmd 1> $log 2>&1
+  $exitCode = $LASTEXITCODE
+
+  # Show last 200 lines for quick feedback
+  if (Test-Path $log) {
+    Write-Host "--- Log (last 200 lines) ---" -ForegroundColor Yellow
+    Get-Content $log -Tail 200 | ForEach-Object { Write-Host $_ }
+  }
+
+  if ($exitCode -ne 0) {
+    Write-Host "--- Full log ---" -ForegroundColor Red
+    if (Test-Path $log) { Get-Content $log | ForEach-Object { Write-Host $_ } }
     Write-Error $errorMessage
-    exit $proc.ExitCode
+    exit $exitCode
   }
 }
 
