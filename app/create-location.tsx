@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { useAuth } from './context/AuthContext';
 import { api } from './lib/api';
-import { getCurrentWiFiIds, isValidWiFiId, normalizeWiFiId } from './lib/locationService';
+import { getCurrentWiFiIds, isValidWiFiId, normalizeWiFiId, getCurrentGPSLocation } from './lib/locationService';
 
 const CreateLocationScreen = () => {
   const router = useRouter();
@@ -44,11 +44,33 @@ const CreateLocationScreen = () => {
     'Outro',
   ];
 
-  const handleUseCurrentLocation = () => {
-    // Simular obtenção de localização atual
-    Alert.alert('Localização', 'Usando localização atual...');
-    setLatitude('-8.8139');
-    setLongitude('13.2319');
+  const handleUseCurrentLocation = async () => {
+    try {
+      // Tentar obter localização real via GPS
+      const gps = await getCurrentGPSLocation();
+
+      if (gps) {
+        setLatitude(gps.latitude.toString());
+        setLongitude(gps.longitude.toString());
+        Alert.alert('Localização', 'Localização atual do dispositivo aplicada com sucesso.');
+      } else {
+        // Se não conseguir GPS, manter valores padrão mas avisar o utilizador
+        Alert.alert(
+          'Localização',
+          'Não foi possível obter a localização real do dispositivo.\n\n' +
+            'A localização padrão está a ser usada (coordenadas de exemplo).'
+        );
+        setLatitude('-8.8139');
+        setLongitude('13.2319');
+      }
+    } catch (error) {
+      console.warn('[CreateLocation] Erro ao obter localização atual:', error);
+      Alert.alert(
+        'Erro',
+        'Ocorreu um erro ao tentar obter a localização atual.\n\n' +
+          'Verifique se as permissões de localização estão ativas e tente novamente.'
+      );
+    }
   };
 
   const handleCreateLocation = async () => {

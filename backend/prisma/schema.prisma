@@ -8,18 +8,23 @@ datasource db {
 }
 
 model User {
-  id            String         @id @default(uuid())
-  username      String         @unique
-  email         String         @unique
-  passwordHash  String
-  createdAt     DateTime       @default(now())
-  profile       UserProfile[]
-  announcements Announcement[]
-  reactions     Reaction[]
-  bookmarks     Bookmark[]
-  locations     Location[]     @relation("UserLocations")
-  presence      UserLocationStatus?
-  received      ReceivedAnnouncement[]
+  id                        String                 @id @default(uuid())
+  username                  String                 @unique
+  email                     String                 @unique
+  passwordHash              String
+  createdAt                 DateTime               @default(now())
+  profile                   UserProfile[]
+  announcements             Announcement[]
+  reactions                 Reaction[]
+  bookmarks                 Bookmark[]
+  locations                 Location[]             @relation("UserLocations")
+  presence                  UserLocationStatus?
+  received                  ReceivedAnnouncement[]
+  muleConfig                MuleConfig?
+  muleMessages              MuleMessage[]          @relation("MuleUser")
+  muleMessagesAsDestination MuleMessage[]          @relation("DestinationUser")
+  publicKey                 String? // Chave pública do usuário (para assinaturas)
+  privateKey                String? // Chave privada (criptografada, apenas para assinatura)
 }
 
 model UserProfile {
@@ -34,39 +39,42 @@ model UserProfile {
 }
 
 model Location {
-  id                String         @id @default(uuid())
-  name              String
-  latitude          Float?
-  longitude         Float?
-  radiusMeters      Int?
-  type              LocationType   @default(GEO)
-  identifiers       String[]
-  ownerId           String
-  owner             User           @relation("UserLocations", fields: [ownerId], references: [id])
-  createdAt         DateTime       @default(now())
-  announcements     Announcement[]
-  isPublic          Boolean        @default(false)
-  allowAnnouncements Boolean       @default(false)
-  category          String?
+  id                 String         @id @default(uuid())
+  name               String
+  latitude           Float?
+  longitude          Float?
+  radiusMeters       Int?
+  type               LocationType   @default(GEO)
+  identifiers        String[]
+  ownerId            String
+  owner              User           @relation("UserLocations", fields: [ownerId], references: [id])
+  createdAt          DateTime       @default(now())
+  announcements      Announcement[]
+  isPublic           Boolean        @default(false)
+  allowAnnouncements Boolean        @default(false)
+  category           String?
 }
 
 model Announcement {
-  id           String       @id @default(uuid())
-  authorId     String
-  author       User         @relation(fields: [authorId], references: [id])
-  locationId   String?
-  location     Location?    @relation(fields: [locationId], references: [id])
-  content      String
-  visibility   Visibility   @default(PUBLIC)
-  deliveryMode DeliveryMode @default(CENTRALIZED)
-  policyType   PolicyType   @default(WHITELIST)
-  policyRestrictions Json?  // Array de pares chave-valor, ex.: [{ "key": "Profissao", "value": "Estudante" }]
-  startsAt     DateTime?
-  endsAt       DateTime?
-  createdAt    DateTime     @default(now())
-  reactions    Reaction[]
-  bookmarks    Bookmark[]
-  receivedBy   ReceivedAnnouncement[]
+  id                 String                 @id @default(uuid())
+  authorId           String
+  author             User                   @relation(fields: [authorId], references: [id])
+  locationId         String?
+  location           Location?              @relation(fields: [locationId], references: [id])
+  content            String
+  visibility         Visibility             @default(PUBLIC)
+  deliveryMode       DeliveryMode           @default(CENTRALIZED)
+  policyType         PolicyType             @default(WHITELIST)
+  policyRestrictions Json? // Array de pares chave-valor, ex.: [{ "key": "Profissao", "value": "Estudante" }]
+  startsAt           DateTime?
+  endsAt             DateTime?
+  createdAt          DateTime               @default(now())
+  reactions          Reaction[]
+  bookmarks          Bookmark[]
+  receivedBy         ReceivedAnnouncement[]
+  signature          String? // Assinatura digital da mensagem
+  publicKey          String? // Chave pública do autor (para verificação)
+  muleMessages       MuleMessage[]
 }
 
 model Reaction {
@@ -93,12 +101,12 @@ model Bookmark {
 }
 
 model UserLocationStatus {
-  userId      String   @id
-  user        User     @relation(fields: [userId], references: [id])
-  latitude    Float?
-  longitude   Float?
-  wifiIds     String[]
-  updatedAt   DateTime @default(now())
+  userId    String   @id
+  user      User     @relation(fields: [userId], references: [id])
+  latitude  Float?
+  longitude Float?
+  wifiIds   String[]
+  updatedAt DateTime @default(now())
 }
 
 model ReceivedAnnouncement {
@@ -110,6 +118,41 @@ model ReceivedAnnouncement {
   receivedAt     DateTime     @default(now())
 
   @@unique([userId, announcementId])
+}
+
+model MuleConfig {
+  id            String   @id @default(uuid())
+  userId        String   @unique
+  user          User     @relation(fields: [userId], references: [id])
+  maxSpaceBytes Int      @default(10485760) // 10MB padrão
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @default(now())
+}
+
+model MuleMessage {
+  id                String            @id @default(uuid())
+  announcementId    String
+  announcement      Announcement      @relation(fields: [announcementId], references: [id])
+  muleUserId        String
+  muleUser          User              @relation("MuleUser", fields: [muleUserId], references: [id])
+  destinationUserId String
+  destinationUser   User              @relation("DestinationUser", fields: [destinationUserId], references: [id])
+  status            MuleMessageStatus @default(PENDING)
+  createdAt         DateTime          @default(now())
+  deliveredAt       DateTime?
+  expiresAt         DateTime? // Mensagens expiram após 1 hora se não entregues
+
+  @@index([muleUserId, status])
+  @@index([destinationUserId, status])
+  @@index([announcementId])
+}
+
+enum MuleMessageStatus {
+  PENDING // Aguardando transporte
+  IN_TRANSIT // Em trânsito (mula está no local de destino)
+  DELIVERED // Entregue ao destino
+  EXPIRED // Expirada (não entregue a tempo)
 }
 
 enum Visibility {
@@ -126,6 +169,7 @@ enum PolicyType {
   WHITELIST
   BLACKLIST
 }
+
 enum ReactionType {
   LIKE
 }

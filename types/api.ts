@@ -27,5 +27,7 @@ export interface Announcement {
   } | null;
   reactions: Array<{ id: string; userId: string; type: "LIKE" }>;
   bookmarks: Array<{ id: string; userId: string }>;
+  isVerified?: boolean;
+  receivedViaMule?: boolean;
 }
 

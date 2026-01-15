@@ -190,6 +190,43 @@ const ProfileScreen = () => {
           </TouchableOpacity>
         </View>
 
+        {/* Advanced Features Section */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Funcionalidades Avançadas</Text>
+          
+          <TouchableOpacity 
+            style={styles.infoCard} 
+            onPress={() => router.push('/mules')}
+          >
+            <View style={styles.iconContainer}>
+              <Text style={styles.iconText}>📦</Text>
+            </View>
+            <View style={styles.infoContent}>
+              <Text style={styles.infoLabel}>Mulas</Text>
+              <Text style={styles.infoDescription}>
+                Transportar mensagens de outros usuários
+              </Text>
+            </View>
+            <Text style={styles.chevron}>›</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={styles.infoCard} 
+            onPress={() => router.push('/crypto-keys')}
+          >
+            <View style={styles.iconContainer}>
+              <Text style={styles.iconText}>🔐</Text>
+            </View>
+            <View style={styles.infoContent}>
+              <Text style={styles.infoLabel}>Assinaturas Digitais</Text>
+              <Text style={styles.infoDescription}>
+                Gerar chaves e assinar mensagens
+              </Text>
+            </View>
+            <Text style={styles.chevron}>›</Text>
+          </TouchableOpacity>
+        </View>
+
         <View style={{ height: 20 }} />
       </ScrollView>
 

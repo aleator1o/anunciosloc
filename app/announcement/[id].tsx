@@ -18,7 +18,7 @@ import { Announcement } from '../../types/api';
 export default function AnnouncementDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
   const [announcement, setAnnouncement] = useState<Announcement | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -78,6 +78,16 @@ export default function AnnouncementDetailScreen() {
                 {new Date(announcement.createdAt).toLocaleString()}
               </Text>
               <Text style={styles.body}>{announcement.content}</Text>
+              
+              {/* Botão para enviar via mula */}
+              {announcement.authorId === user?.id && (
+                <TouchableOpacity
+                  style={styles.muleButton}
+                  onPress={() => router.push(`/send-via-mule?announcementId=${announcement.id}`)}
+                >
+                  <Text style={styles.muleButtonText}>📦 Enviar via Mula</Text>
+                </TouchableOpacity>
+              )}
             </View>
           )}
           <View style={{ height: 20 }} />
@@ -121,6 +131,18 @@ const styles = StyleSheet.create({
   title: { fontSize: 20, fontWeight: '700', color: '#1F2937', marginBottom: 6 },
   subtitle: { fontSize: 13, color: '#6B7280', marginBottom: 12 },
   body: { fontSize: 15, color: '#374151', lineHeight: 22 },
+  muleButton: {
+    backgroundColor: '#2196F3',
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 16,
+  },
+  muleButtonText: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: 'bold',
+  },
 });
 
 

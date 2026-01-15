@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../lib/prisma";
 import { requireAuth, AuthenticatedRequest } from "../middleware/auth";
+import { signMessage, verifySignature } from "../lib/crypto";
 
 const router = Router();
 
@@ -103,7 +104,21 @@ router.get("/", requireAuth, async (req: AuthenticatedRequest, res) => {
     return checkPolicyAccess(policyType, restrictions, profileMap);
   });
 
-  res.json({ announcements: filtered });
+  // Adicionar verificação de assinatura para cada anúncio
+  const announcementsWithVerification = filtered.map(a => {
+    let isVerified = false;
+    if (a.signature && a.publicKey) {
+      // Verificar assinatura (usar conteúdo + autor + timestamp aproximado)
+      const messageToVerify = `${a.content}|${a.authorId}|${a.createdAt.getTime()}`;
+      isVerified = verifySignature(messageToVerify, a.signature, a.publicKey);
+    }
+    return {
+      ...a,
+      isVerified,
+    };
+  });
+
+  res.json({ announcements: announcementsWithVerification });
 });
 
 /**
@@ -246,12 +261,23 @@ router.get("/available", requireAuth, async (req: AuthenticatedRequest, res) => 
   const now = new Date();
   const presence = await prisma.userLocationStatus.findUnique({ where: { userId: req.userId! } });
 
+  // Buscar anúncios recebidos via mula (ReceivedAnnouncement)
+  const receivedAnnouncements = await prisma.receivedAnnouncement.findMany({
+    where: { userId: req.userId! },
+    select: { announcementId: true },
+  });
+  const receivedIds = new Set(receivedAnnouncements.map(r => r.announcementId));
+
   const announcements = await prisma.announcement.findMany({
     include: {
       author: { select: { id: true, username: true } },
       location: true,
       reactions: true,
       bookmarks: true,
+      receivedBy: {
+        where: { userId: req.userId! },
+        select: { id: true },
+      },
     },
     orderBy: { createdAt: "desc" },
   });
@@ -263,6 +289,19 @@ router.get("/available", requireAuth, async (req: AuthenticatedRequest, res) => 
   const profileMap = new Map(profileAttrs.map(a => [a.key.toLowerCase(), a.value.toLowerCase()]));
 
   const available = announcements.filter(a => {
+    // Se foi recebido via mula (tem ReceivedAnnouncement), sempre incluir
+    const wasReceivedViaMule = receivedIds.has(a.id) || (a.receivedBy && a.receivedBy.length > 0);
+    if (wasReceivedViaMule) {
+      // Ainda aplicar políticas e janela de tempo, mas ignorar verificação de localização
+      if (a.startsAt && now < a.startsAt) return false;
+      if (a.endsAt && now > a.endsAt) return false;
+
+      const restrictions = (a as any).policyRestrictions as Array<{ key: string; value: string }> | null | undefined;
+      const policyType = (a as any).policyType as "WHITELIST" | "BLACKLIST" | undefined;
+      return checkPolicyAccess(policyType, restrictions, profileMap);
+    }
+
+    // Para anúncios não recebidos via mula, aplicar lógica normal (localização + políticas)
     if (a.startsAt && now < a.startsAt) return false;
     if (a.endsAt && now > a.endsAt) return false;
 
@@ -300,7 +339,24 @@ router.get("/available", requireAuth, async (req: AuthenticatedRequest, res) => 
     return checkPolicyAccess(policyType, restrictions, profileMap);
   });
 
-  res.json({ announcements: available });
+  // Adicionar verificação de assinatura para cada anúncio
+  const announcementsWithVerification = available.map(a => {
+    let isVerified = false;
+    if (a.signature && a.publicKey) {
+      // Verificar assinatura (usar conteúdo + autor + timestamp aproximado)
+      const messageToVerify = `${a.content}|${a.authorId}|${a.createdAt.getTime()}`;
+      isVerified = verifySignature(messageToVerify, a.signature, a.publicKey);
+    }
+    // Remover receivedBy do objeto final (não precisa ser enviado ao frontend)
+    const { receivedBy, ...announcementWithoutReceivedBy } = a;
+    return {
+      ...announcementWithoutReceivedBy,
+      isVerified,
+      receivedViaMule: receivedIds.has(a.id) || (receivedBy && receivedBy.length > 0),
+    };
+  });
+
+  res.json({ announcements: announcementsWithVerification });
 });
 
 /**
@@ -446,6 +502,22 @@ router.post("/", requireAuth, async (req: AuthenticatedRequest, res) => {
     });
   }
 
+  // Gerar assinatura digital se o usuário tiver chave privada
+  let signature: string | null = null;
+  let publicKey: string | null = null;
+
+  const user = await prisma.user.findUnique({
+    where: { id: req.userId! },
+    select: { privateKey: true, publicKey: true },
+  });
+
+  if (user?.privateKey && user?.publicKey) {
+    // Criar mensagem para assinar: conteúdo + autor + timestamp
+    const messageToSign = `${content}|${req.userId!}|${Date.now()}`;
+    signature = signMessage(messageToSign, user.privateKey);
+    publicKey = user.publicKey;
+  }
+
   const announcement = await prisma.announcement.create({
     data: {
       authorId: req.userId!,
@@ -457,6 +529,8 @@ router.post("/", requireAuth, async (req: AuthenticatedRequest, res) => {
       policyRestrictions: policyRestrictions && policyRestrictions.length > 0 ? (policyRestrictions as any) : undefined,
       startsAt: startsAt ? new Date(startsAt) : undefined,
       endsAt: endsAt ? new Date(endsAt) : undefined,
+      signature: signature || undefined,
+      publicKey: publicKey || undefined,
     },
   });
 

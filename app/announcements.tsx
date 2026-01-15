@@ -410,6 +410,24 @@ const AnnouncementsScreen = () => {
                       <Text style={styles.locationText}>{announcement.location?.name || 'Local desconhecido'}</Text>
                     </View>
                   )}
+                  {/* Signature Verification Badge */}
+                  {(announcement as any).isVerified !== undefined && (
+                    <View style={styles.verificationBadge}>
+                      <Text style={styles.verificationIcon}>
+                        {(announcement as any).isVerified ? '✅' : '⚠️'}
+                      </Text>
+                      <Text style={styles.verificationText}>
+                        {(announcement as any).isVerified ? 'Verificado' : 'Não verificado'}
+                      </Text>
+                    </View>
+                  )}
+                  {/* Mule Delivery Badge */}
+                  {(announcement as any).receivedViaMule && (
+                    <View style={[styles.verificationBadge, { backgroundColor: '#DCFCE7', marginLeft: 8 }]}>
+                      <Text style={styles.verificationIcon}>📦</Text>
+                      <Text style={[styles.verificationText, { color: '#166534' }]}>Via Mula</Text>
+                    </View>
+                  )}
                 </View>
 
                 {/* Content */}
@@ -716,8 +734,26 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3F4F6',
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 6,
-    alignSelf: 'flex-start',
+    borderRadius: 4,
+    marginTop: 4,
+  },
+  verificationBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#E3F2FD',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+    marginTop: 4,
+  },
+  verificationIcon: {
+    fontSize: 12,
+    marginRight: 4,
+  },
+  verificationText: {
+    fontSize: 11,
+    color: '#1976D2',
+    fontWeight: '600',
   },
   locationIcon: {
     fontSize: 12,

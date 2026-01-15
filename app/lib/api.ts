@@ -250,3 +250,93 @@ export async function verifyAnnouncementLocation(token: string, announcementId: 
   );
 }
 
+// --------- Mulas (Roteamento de Retransmissão) ---------
+export interface MuleConfig {
+  id: string;
+  userId: string;
+  maxSpaceBytes: number;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MuleMessage {
+  id: string;
+  announcementId: string;
+  muleUserId: string;
+  destinationUserId: string;
+  status: 'PENDING' | 'IN_TRANSIT' | 'DELIVERED' | 'EXPIRED';
+  createdAt: string;
+  deliveredAt?: string;
+  expiresAt?: string;
+  announcement?: any;
+  destinationUser?: { id: string; username: string };
+}
+
+export interface AvailableMule {
+  userId: string;
+  username: string;
+  availableSpaceBytes: number;
+  maxSpaceBytes: number;
+}
+
+export async function getMuleConfig(token: string) {
+  return api.get<{ config: MuleConfig }>("/mules/config", token);
+}
+
+export async function updateMuleConfig(token: string, maxSpaceBytes: number, isActive?: boolean) {
+  return api.post<{ config: MuleConfig }, { maxSpaceBytes: number; isActive?: boolean }>(
+    "/mules/config",
+    { maxSpaceBytes, isActive },
+    token
+  );
+}
+
+export async function getAvailableMules(token: string, announcementId: string) {
+  return api.get<{ mules: AvailableMule[] }>(`/mules/available?announcementId=${announcementId}`, token);
+}
+
+export async function sendViaMule(
+  token: string,
+  announcementId: string,
+  muleUserId: string,
+  destinationUserId: string
+) {
+  return api.post<{ muleMessage: MuleMessage }, { announcementId: string; muleUserId: string; destinationUserId: string }>(
+    "/mules/send",
+    { announcementId, muleUserId, destinationUserId },
+    token
+  );
+}
+
+export async function getMuleMessages(token: string) {
+  return api.get<{ messages: MuleMessage[] }>("/mules/messages", token);
+}
+
+export async function deliverMuleMessage(token: string, muleMessageId: string) {
+  return api.post<{ muleMessage: MuleMessage }, { muleMessageId: string }>(
+    "/mules/deliver",
+    { muleMessageId },
+    token
+  );
+}
+
+// --------- Assinaturas Digitais ---------
+export interface PublicKeyInfo {
+  userId: string;
+  username: string;
+  publicKey: string | null;
+}
+
+export async function generateKeys(token: string, password?: string) {
+  return api.post<{ message: string; publicKey: string }, { password?: string }>(
+    "/crypto/generate-keys",
+    password ? { password } : {},
+    token
+  );
+}
+
+export async function getPublicKey(token: string) {
+  return api.get<PublicKeyInfo>("/crypto/public-key", token);
+}
+

@@ -21,6 +21,7 @@
     "bcryptjs": "^2.4.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
+    "expo-location": "~19.0.8",
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.2",
     "morgan": "^1.10.0",
@@ -44,4 +45,3 @@
     "seed": "ts-node prisma/seed.ts"
   }
 }
-
