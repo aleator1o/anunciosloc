@@ -6,6 +6,35 @@ import { requireAuth, AuthenticatedRequest } from "../middleware/auth";
 const router = Router();
 
 /**
+ * Função auxiliar para verificar se um anúncio deve ser visível para um utilizador
+ * baseado nas políticas e restrições
+ */
+function checkPolicyAccess(
+  policyType: "WHITELIST" | "BLACKLIST" | null | undefined,
+  restrictions: Array<{ key: string; value: string }> | null | undefined,
+  userProfileMap: Map<string, string>
+): boolean {
+  // Se não houver política definida, permitir todos (comportamento padrão)
+  if (!policyType) return true;
+  
+  // Se não houver restrições:
+  // - WHITELIST vazia = ninguém pode ver (lista branca vazia = nenhum permitido)
+  // - BLACKLIST vazia = todos podem ver (lista negra vazia = nenhum bloqueado)
+  if (!restrictions || restrictions.length === 0) {
+    return policyType === "BLACKLIST"; // BLACKLIST vazia = todos veem, WHITELIST vazia = ninguém vê
+  }
+
+  // Verificar se o perfil do usuário corresponde às restrições
+  const matches = restrictions.every(r => 
+    userProfileMap.get(r.key.toLowerCase()) === r.value.toLowerCase()
+  );
+
+  // WHITELIST: apenas quem corresponde pode ver
+  // BLACKLIST: todos podem ver exceto quem corresponde
+  return policyType === "WHITELIST" ? matches : !matches;
+}
+
+/**
  * @openapi
  * /api/announcements:
  *   get:
@@ -65,16 +94,13 @@ router.get("/", requireAuth, async (req: AuthenticatedRequest, res) => {
 
     // Ignorar filtro de localização aqui (GET geral). A versão específica está em /available
 
-    // Sem restrições => permitido
+    // Aplicar políticas de acesso
     // @ts-ignore
     const restrictions = (a as any).policyRestrictions as Array<{ key: string; value: string }> | null | undefined;
     // @ts-ignore
     const policyType = (a as any).policyType as "WHITELIST" | "BLACKLIST" | undefined;
-    if (!restrictions || restrictions.length === 0 || !policyType) return true;
-
-    const matches = restrictions.every(r => profileMap.get(r.key.toLowerCase()) === r.value.toLowerCase());
-
-    return policyType === "WHITELIST" ? matches : !matches;
+    
+    return checkPolicyAccess(policyType, restrictions, profileMap);
   });
 
   res.json({ announcements: filtered });
@@ -270,10 +296,8 @@ router.get("/available", requireAuth, async (req: AuthenticatedRequest, res) => 
 
     const restrictions = (a as any).policyRestrictions as Array<{ key: string; value: string }> | null | undefined;
     const policyType = (a as any).policyType as "WHITELIST" | "BLACKLIST" | undefined;
-    if (!restrictions || restrictions.length === 0 || !policyType) return true;
-
-    const matches = restrictions.every(r => profileMap.get(r.key.toLowerCase()) === r.value.toLowerCase());
-    return policyType === "WHITELIST" ? matches : !matches;
+    
+    return checkPolicyAccess(policyType, restrictions, profileMap);
   });
 
   res.json({ announcements: available });
@@ -402,6 +426,24 @@ router.post("/", requireAuth, async (req: AuthenticatedRequest, res) => {
     if (!location) {
       return res.status(404).json({ message: "Local não encontrado" });
     }
+    
+    // Verificar se o usuário pode publicar neste local
+    // Pode publicar se: é o dono OU allowAnnouncements está ativo
+    if (location.ownerId !== req.userId! && !location.allowAnnouncements) {
+      return res.status(403).json({ 
+        message: "Você não tem permissão para criar anúncios neste local. O dono do local precisa permitir anúncios de outros usuários.",
+        code: "LOCATION_ANNOUNCEMENTS_NOT_ALLOWED"
+      });
+    }
+  }
+
+  // Validar política: WHITELIST sem restrições não faz sentido (ninguém verá)
+  const hasRestrictions = policyRestrictions && policyRestrictions.length > 0;
+  if (policyType === "WHITELIST" && !hasRestrictions) {
+    return res.status(400).json({ 
+      message: "Whitelist sem restrições: Ninguém poderá ver este anúncio. Adicione pelo menos uma restrição ou use Blacklist.",
+      code: "WHITELIST_EMPTY"
+    });
   }
 
   const announcement = await prisma.announcement.create({
@@ -412,7 +454,7 @@ router.post("/", requireAuth, async (req: AuthenticatedRequest, res) => {
       visibility,
       deliveryMode,
       policyType,
-      policyRestrictions: policyRestrictions ? (policyRestrictions as any) : undefined,
+      policyRestrictions: policyRestrictions && policyRestrictions.length > 0 ? (policyRestrictions as any) : undefined,
       startsAt: startsAt ? new Date(startsAt) : undefined,
       endsAt: endsAt ? new Date(endsAt) : undefined,
     },
@@ -456,8 +498,13 @@ router.put("/:id", requireAuth, async (req: AuthenticatedRequest, res) => {
   }
 
   const announcement = await prisma.announcement.findUnique({ where: { id: req.params.id } });
-  if (!announcement || announcement.authorId !== req.userId) {
+  if (!announcement) {
     return res.status(404).json({ message: "Anúncio não encontrado" });
+  }
+  
+  // Verificar se o usuário é o autor do anúncio
+  if (announcement.authorId !== req.userId) {
+    return res.status(403).json({ message: "Apenas o autor pode editar este anúncio" });
   }
 
   const updated = await prisma.announcement.update({

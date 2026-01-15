@@ -96,8 +96,19 @@ const AnnouncementsScreen = () => {
 
     initializeLocation();
 
-    // Iniciar serviço de notificações
-    notificationService.start(token, 60000); // Verificar a cada 60 segundos
+    // Configurar callback para verificar notificações quando a localização for enviada
+    locationService.setOnLocationSentCallback(async (location) => {
+      console.log('[Announcements] Localização enviada, verificando notificações...');
+      // Aguardar um pouco para garantir que o backend processou a localização
+      setTimeout(async () => {
+        if (token) {
+          await notificationService.checkNow();
+        }
+      }, 3000); // 3 segundos após envio da localização
+    });
+
+    // Iniciar serviço de notificações (verificar a cada 30 segundos)
+    notificationService.start(token, 30000);
 
     // Iniciar serviço P2P
     if (user?.id) {
@@ -142,7 +153,12 @@ const AnnouncementsScreen = () => {
     loadAvailable();
 
     // Atualizar anúncios disponíveis periodicamente (a cada 30s)
-    const interval = setInterval(loadAvailable, 30000);
+    // E verificar notificações após cada atualização
+    const interval = setInterval(async () => {
+      await loadAvailable();
+      // Após carregar disponíveis, verificar notificações
+      await notificationService.checkNow();
+    }, 30000);
 
     // Verificar mensagens P2P recebidas periodicamente
     const p2pCheckInterval = setInterval(async () => {

@@ -73,9 +73,26 @@ class LocationService {
     try {
       await updateUserLocation(this.token, this.currentLocation);
       console.log('[LocationService] Localização enviada:', this.currentLocation);
+      
+      // Chamar callback se estiver definido
+      if (this.onLocationSent) {
+        this.onLocationSent(this.currentLocation);
+      }
     } catch (error) {
       console.error('[LocationService] Erro ao enviar localização:', error);
     }
+  }
+
+  /**
+   * Callback chamado quando a localização é enviada (para notificações)
+   */
+  onLocationSent: ((location: LocationUpdate) => void) | null = null;
+
+  /**
+   * Define callback para quando a localização é enviada
+   */
+  setOnLocationSentCallback(callback: (location: LocationUpdate) => void) {
+    this.onLocationSent = callback;
   }
 
   /**

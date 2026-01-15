@@ -23,11 +23,35 @@ const router = Router();
  *         description: Lista de locais
  */
 router.get("/", requireAuth, async (req: AuthenticatedRequest, res) => {
-  const ownerId = (req.query.ownerId as string | undefined) || req.userId;
+  const ownerId = req.query.ownerId as string | undefined;
+  const includePublic = req.query.includePublic === "true";
+
+  // Se não especificar ownerId e includePublic, mostrar apenas os próprios locais
+  // Se includePublic=true, mostrar locais públicos + próprios locais
+  const where: any = {};
+  
+  if (ownerId) {
+    // Buscar locais de um usuário específico
+    where.ownerId = ownerId;
+  } else if (includePublic) {
+    // Buscar locais públicos + locais do próprio usuário
+    where.OR = [
+      { isPublic: true },
+      { ownerId: req.userId! },
+    ];
+  } else {
+    // Apenas locais próprios
+    where.ownerId = req.userId!;
+  }
 
   const locations = await prisma.location.findMany({
-    where: { ownerId },
+    where,
     orderBy: { createdAt: "desc" },
+    include: {
+      owner: {
+        select: { id: true, username: true },
+      },
+    },
   });
 
   res.json({ locations });
@@ -40,6 +64,9 @@ const locationSchema = z.object({
   radiusMeters: z.number().int().positive().optional(),
   type: z.enum(["GEO", "WIFI", "BLE"]).optional(),
   identifiers: z.array(z.string()).optional(),
+  isPublic: z.boolean().optional().default(false),
+  allowAnnouncements: z.boolean().optional().default(false),
+  category: z.string().optional(),
 });
 
 /**

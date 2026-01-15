@@ -23,7 +23,8 @@ const CreateLocationScreen = () => {
   const [locationType, setLocationType] = useState<'GPS' | 'WiFi/BLE'>('GPS');
   const [locationName, setLocationName] = useState('');
   const [description, setDescription] = useState('');
-  const [category, ] = useState('');
+  const [category, setCategory] = useState('');
+  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
   const [latitude, setLatitude] = useState('-8.8139');
   const [longitude, setLongitude] = useState('13.2319');
   const [radius, setRadius] = useState('50');
@@ -111,6 +112,9 @@ const CreateLocationScreen = () => {
         radiusMeters: locationType === 'GPS' ? radiusValue : undefined,
         type: locationType === 'GPS' ? 'GEO' : 'WIFI',
         identifiers: locationType === 'WiFi/BLE' ? wifiIds.split(',').map((id) => normalizeWiFiId(id)).filter(Boolean) : [],
+        isPublic: isPublic,
+        allowAnnouncements: allowAnnouncements,
+        category: category.trim() || undefined,
       };
 
       await api.post('/locations', payload, token);
@@ -174,13 +178,41 @@ const CreateLocationScreen = () => {
           </View>
 
           <View style={styles.inputContainer}>
-            <Text style={styles.inputLabel}>Categoria</Text>
-            <TouchableOpacity style={styles.selectInput}>
+            <Text style={styles.inputLabel}>Categoria (opcional)</Text>
+            <TouchableOpacity 
+              style={styles.selectInput}
+              onPress={() => setShowCategoryPicker(!showCategoryPicker)}
+            >
               <Text style={category ? styles.selectText : styles.selectPlaceholder}>
                 {category || 'Selecionar categoria'}
               </Text>
               <Text style={styles.chevron}>⌄</Text>
             </TouchableOpacity>
+            {showCategoryPicker && (
+              <View style={styles.categoryPicker}>
+                {categories.map((cat) => (
+                  <TouchableOpacity
+                    key={cat}
+                    style={styles.categoryOption}
+                    onPress={() => {
+                      setCategory(cat);
+                      setShowCategoryPicker(false);
+                    }}
+                  >
+                    <Text style={styles.categoryOptionText}>{cat}</Text>
+                  </TouchableOpacity>
+                ))}
+                <TouchableOpacity
+                  style={styles.categoryOption}
+                  onPress={() => {
+                    setCategory('');
+                    setShowCategoryPicker(false);
+                  }}
+                >
+                  <Text style={[styles.categoryOptionText, { color: '#9CA3AF' }]}>Remover categoria</Text>
+                </TouchableOpacity>
+              </View>
+            )}
           </View>
         </View>
 
@@ -491,6 +523,23 @@ const styles = StyleSheet.create({
   chevron: {
     fontSize: 20,
     color: '#6B7280',
+  },
+  categoryPicker: {
+    marginTop: 8,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    maxHeight: 200,
+  },
+  categoryOption: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  categoryOptionText: {
+    fontSize: 15,
+    color: '#1F2937',
   },
   typeButtonsContainer: {
     flexDirection: 'row',

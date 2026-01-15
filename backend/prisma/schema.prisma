@@ -34,17 +34,20 @@ model UserProfile {
 }
 
 model Location {
-  id            String         @id @default(uuid())
-  name          String
-  latitude      Float?
-  longitude     Float?
-  radiusMeters  Int?
-  type          LocationType   @default(GEO)
-  identifiers   String[]
-  ownerId       String
-  owner         User           @relation("UserLocations", fields: [ownerId], references: [id])
-  createdAt     DateTime       @default(now())
-  announcements Announcement[]
+  id                String         @id @default(uuid())
+  name              String
+  latitude          Float?
+  longitude         Float?
+  radiusMeters      Int?
+  type              LocationType   @default(GEO)
+  identifiers       String[]
+  ownerId           String
+  owner             User           @relation("UserLocations", fields: [ownerId], references: [id])
+  createdAt         DateTime       @default(now())
+  announcements     Announcement[]
+  isPublic          Boolean        @default(false)
+  allowAnnouncements Boolean       @default(false)
+  category          String?
 }
 
 model Announcement {

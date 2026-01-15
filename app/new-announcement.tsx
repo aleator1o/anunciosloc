@@ -50,7 +50,8 @@ const NewAnnouncementScreen = () => {
       if (!token) return;
       try {
         setLoadingLocations(true);
-        const res = await api.get<{ locations: Array<{ id: string; name: string }> }>('/locations', token);
+        // Carregar locais próprios + locais públicos
+        const res = await api.get<{ locations: Array<{ id: string; name: string }> }>('/locations?includePublic=true', token);
         setLocations(res.locations || []);
       } catch (err) {
         console.error('Erro ao carregar locais:', err);
@@ -122,8 +123,9 @@ const NewAnnouncementScreen = () => {
           onPress: () => router.replace('/announcements'),
         },
       ]);
-    } catch (err) {
-      Alert.alert('Erro', (err as Error).message ?? 'Não foi possível publicar o anúncio');
+    } catch (err: any) {
+      const errorMessage = err?.response?.data?.message || err?.message || 'Não foi possível publicar o anúncio';
+      Alert.alert('Erro', errorMessage);
     } finally {
       setSubmitting(false);
     }
@@ -210,7 +212,9 @@ const NewAnnouncementScreen = () => {
           {restrictions.length === 0 && (
             <View style={styles.visibilityInfo}>
               <Text style={styles.visibilityInfoText}>
-                ℹ️ Se não adicionar restrições, o anúncio será visível para todos os utilizadores (independente da política escolhida).
+                {policyType === 'WHITELIST' 
+                  ? '⚠️ Whitelist sem restrições: Ninguém poderá ver este anúncio (lista branca vazia = nenhum permitido). Adicione restrições para permitir acesso.'
+                  : 'ℹ️ Blacklist sem restrições: Todos os utilizadores poderão ver este anúncio (lista negra vazia = nenhum bloqueado). Adicione restrições para bloquear utilizadores específicos.'}
               </Text>
             </View>
           )}

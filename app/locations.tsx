@@ -44,7 +44,7 @@ const LocationsScreen = () => {
       try {
         setLoading(true);
         setError(null);
-        const response = await api.get<{ locations: Location[] }>('/locations', token);
+        const response = await api.get<{ locations: Location[] }>('/locations?includePublic=true', token);
         setLocations(response.locations);
       } catch (err) {
         setError((err as Error).message ?? 'Não foi possível carregar os locais');

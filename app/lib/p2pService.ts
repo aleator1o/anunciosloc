@@ -432,10 +432,14 @@ class P2PService {
     announcement: Announcement,
     device: DiscoveredDevice
   ): Promise<boolean> {
-    // Se não houver restrições, enviar para todos
     const restrictions = announcement.policyRestrictions as Array<{ key: string; value: string }> | null | undefined;
+    const policyType = announcement.policyType || 'WHITELIST';
+    
+    // Se não houver restrições:
+    // - WHITELIST vazia = ninguém pode ver (lista branca vazia = nenhum permitido)
+    // - BLACKLIST vazia = todos podem ver (lista negra vazia = nenhum bloqueado)
     if (!restrictions || restrictions.length === 0) {
-      return true;
+      return policyType === 'BLACKLIST'; // BLACKLIST vazia = todos veem, WHITELIST vazia = ninguém vê
     }
 
     // Se o dispositivo não tiver perfil carregado, solicitar
@@ -454,7 +458,8 @@ class P2PService {
       deviceProfileMap.get(r.key.toLowerCase()) === r.value.toLowerCase()
     );
 
-    const policyType = announcement.policyType || 'WHITELIST';
+    // WHITELIST: apenas quem corresponde pode ver
+    // BLACKLIST: todos podem ver exceto quem corresponde
     return policyType === 'WHITELIST' ? matches : !matches;
   }
 

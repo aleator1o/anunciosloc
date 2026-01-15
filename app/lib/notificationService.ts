@@ -22,8 +22,10 @@ class NotificationService {
   private isRunning = false;
   private token: string | null = null;
   private lastAnnouncementIds: Set<string> = new Set();
-  private checkInterval = 60000; // Verificar a cada 60 segundos
+  private lastLocationKey: string | null = null; // Para detectar mudanças de localização
+  private checkInterval = 30000; // Verificar a cada 30 segundos (mais frequente)
   private hasPermission = false;
+  private lastCheckTime: number = 0;
 
   /**
    * Solicita permissão para notificações
@@ -78,17 +80,36 @@ class NotificationService {
     this.checkInterval = interval;
     this.isRunning = true;
 
-    // Verificar imediatamente
-    await this.checkForNewAnnouncements();
+    // Limpar histórico ao iniciar (para garantir que notifica na primeira vez)
+    this.lastAnnouncementIds.clear();
+    this.lastLocationKey = null;
+    this.lastCheckTime = 0;
+
+    // Verificar múltiplas vezes no início para garantir detecção:
+    // 1. Primeira verificação rápida (caso já tenha localização)
+    setTimeout(async () => {
+      if (this.isRunning && this.token) {
+        console.log('[NotificationService] 🔍 Primeira verificação (5s após inicialização)...');
+        await this.checkForNewAnnouncements(true);
+      }
+    }, 5000); // 5 segundos
+
+    // 2. Segunda verificação após enviar localização
+    setTimeout(async () => {
+      if (this.isRunning && this.token) {
+        console.log('[NotificationService] 🔍 Segunda verificação (10s após inicialização - após envio de localização)...');
+        await this.checkForNewAnnouncements(false);
+      }
+    }, 10000); // 10 segundos (após localização ser enviada)
 
     // Configurar verificação periódica
-    this.intervalId = setInterval(() => {
+    this.intervalId = setInterval(async () => {
       if (this.isRunning && this.token) {
-        this.checkForNewAnnouncements();
+        await this.checkForNewAnnouncements(false);
       }
     }, this.checkInterval);
 
-    console.log('[NotificationService] Serviço iniciado');
+    console.log(`[NotificationService] Serviço iniciado (verificação a cada ${this.checkInterval / 1000}s)`);
   }
 
   /**
@@ -107,14 +128,21 @@ class NotificationService {
   /**
    * Verifica se há novas mensagens disponíveis e notifica
    */
-  private async checkForNewAnnouncements() {
+  private async checkForNewAnnouncements(isFirstCheck: boolean = false) {
     if (!this.token) {
+      console.warn('[NotificationService] Token não disponível para verificação');
       return;
     }
 
     try {
       const response = await fetchAvailableAnnouncements(this.token);
       const announcements: Announcement[] = response.announcements || [];
+      
+      console.log(`[NotificationService] Verificação: ${announcements.length} mensagem(ns) disponível(eis)`);
+
+      // Criar chave de localização baseada nos IDs dos anúncios (para detectar mudanças de local)
+      const locationKey = announcements.map(a => a.id).sort().join(',');
+      const locationChanged = this.lastLocationKey !== null && this.lastLocationKey !== locationKey;
 
       // Identificar novas mensagens (que não estavam na última verificação)
       const currentIds = new Set(announcements.map(a => a.id));
@@ -122,13 +150,38 @@ class NotificationService {
         a => !this.lastAnnouncementIds.has(a.id)
       );
 
-      // Se houver novas mensagens, notificar
-      if (newAnnouncements.length > 0) {
-        await this.sendNotification(newAnnouncements);
+      // Notificar se:
+      // 1. Há novas mensagens (primeira vez que aparecem)
+      // 2. É a primeira verificação E há mensagens disponíveis (usuário acabou de abrir o app ou entrar na tela)
+      // 3. Mudou de local E há mensagens disponíveis (usuário entrou em um novo local com mensagens)
+      const shouldNotify = 
+        newAnnouncements.length > 0 || // Novas mensagens apareceram
+        (isFirstCheck && announcements.length > 0) || // Primeira verificação com mensagens disponíveis
+        (locationChanged && announcements.length > 0); // Mudou de local com mensagens disponíveis
+
+      if (shouldNotify && announcements.length > 0) {
+        // Se há novas mensagens, notificar sobre elas
+        // Se não há novas mas mudou de local ou é primeira verificação, notificar sobre todas disponíveis
+        const announcementsToNotify = newAnnouncements.length > 0 
+          ? newAnnouncements 
+          : announcements; // Se não há novas, notificar sobre todas (entrou em novo local ou primeira verificação)
+        
+        const reason = newAnnouncements.length > 0 
+          ? 'novas mensagens'
+          : isFirstCheck 
+            ? 'primeira verificação (entrou na tela com mensagens disponíveis)'
+            : 'mudou de local (entrou em local com mensagens)';
+        
+        console.log(`[NotificationService] 🔔 Notificando sobre ${announcementsToNotify.length} mensagem(ns) - Motivo: ${reason}`);
+        await this.sendNotification(announcementsToNotify);
+      } else {
+        console.log(`[NotificationService] ℹ️ Sem notificações necessárias (${announcements.length} mensagens disponíveis, ${newAnnouncements.length} novas)`);
       }
 
       // Atualizar conjunto de IDs conhecidos
       this.lastAnnouncementIds = currentIds;
+      this.lastLocationKey = locationKey;
+      this.lastCheckTime = Date.now();
 
       // Atualizar badge com número de mensagens disponíveis
       await this.updateBadge(announcements.length);
@@ -142,19 +195,27 @@ class NotificationService {
    */
   private async sendNotification(announcements: Announcement[]) {
     if (!this.hasPermission) {
-      return;
+      console.warn('[NotificationService] Sem permissão para enviar notificação. Solicitando permissões...');
+      const granted = await this.requestPermissions();
+      if (!granted) {
+        console.error('[NotificationService] Permissões negadas. Não é possível enviar notificações.');
+        return;
+      }
     }
 
     const count = announcements.length;
     const title = count === 1 
-      ? 'Nova mensagem disponível!' 
-      : `${count} novas mensagens disponíveis!`;
+      ? '📢 Nova mensagem disponível!' 
+      : `📢 ${count} mensagens disponíveis!`;
     
     const body = count === 1
       ? announcements[0].content.substring(0, 100) + (announcements[0].content.length > 100 ? '...' : '')
-      : `Você tem ${count} mensagens disponíveis no seu local atual.`;
+      : `Você tem ${count} mensagens disponíveis no seu local atual. Abra o app para ver.`;
 
     try {
+      // Cancelar notificações anteriores para evitar spam
+      await Notifications.cancelAllScheduledNotificationsAsync();
+      
       await Notifications.scheduleNotificationAsync({
         content: {
           title,
@@ -163,15 +224,17 @@ class NotificationService {
             type: 'new_announcements',
             count,
             announcementIds: announcements.map(a => a.id),
+            timestamp: Date.now(),
           },
           sound: true,
+          priority: Notifications.AndroidNotificationPriority.HIGH,
         },
         trigger: null, // Enviar imediatamente
       });
 
-      console.log(`[NotificationService] Notificação enviada: ${count} nova(s) mensagem(ns)`);
+      console.log(`[NotificationService] ✅ Notificação enviada: ${count} mensagem(ns) - "${title}"`);
     } catch (error) {
-      console.error('[NotificationService] Erro ao enviar notificação:', error);
+      console.error('[NotificationService] ❌ Erro ao enviar notificação:', error);
     }
   }
 
@@ -203,26 +266,38 @@ class NotificationService {
    */
   async checkNow(): Promise<number> {
     if (!this.token) {
+      console.warn('[NotificationService] Token não disponível para checkNow()');
       return 0;
     }
 
     try {
+      console.log('[NotificationService] Verificação manual solicitada...');
       const response = await fetchAvailableAnnouncements(this.token);
       const announcements: Announcement[] = response.announcements || [];
       
+      console.log(`[NotificationService] Verificação manual: ${announcements.length} mensagem(ns) disponível(eis)`);
+      
+      // Criar chave de localização
+      const locationKey = announcements.map(a => a.id).sort().join(',');
+      const locationChanged = this.lastLocationKey !== null && this.lastLocationKey !== locationKey;
+      
       const currentIds = new Set(announcements.map(a => a.id));
-      const newCount = announcements.filter(
+      const newAnnouncements = announcements.filter(
         a => !this.lastAnnouncementIds.has(a.id)
-      ).length;
+      );
 
-      if (newCount > 0) {
-        const newAnnouncements = announcements.filter(
-          a => !this.lastAnnouncementIds.has(a.id)
-        );
-        await this.sendNotification(newAnnouncements);
+      // Notificar se há novas mensagens OU se mudou de local com mensagens disponíveis
+      if (newAnnouncements.length > 0 || (locationChanged && announcements.length > 0)) {
+        const toNotify = newAnnouncements.length > 0 
+          ? newAnnouncements 
+          : announcements;
+        
+        console.log(`[NotificationService] Notificando manualmente sobre ${toNotify.length} mensagem(ns)`);
+        await this.sendNotification(toNotify);
       }
 
       this.lastAnnouncementIds = currentIds;
+      this.lastLocationKey = locationKey;
       await this.updateBadge(announcements.length);
 
       return announcements.length;
